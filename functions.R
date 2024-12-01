@@ -7,16 +7,19 @@ SILR <- function(A,k,kw,family){
   if(family == 'poisson'){
     g <- function(x) exp(x)
     g_inverse <- function(x) log(x)
+    nu_pp <- function(x) exp(x)
   }
   
   if(family == 'bernoulli'){
     g <- function(x) 1/(1+exp(-x))
     g_inverse <- function(x) log(x/(1-x))
+    nu_pp <- function(x) exp(x)/(1+exp(x))^2
   }
   
   if(family == 'gaussian'){
     g <- function(x) x
     g_inverse <- function(x) x
+    nu_pp <- function(x) !is.na(x)
   }
   
   #Stage1: USVT and PGD for each At
@@ -171,7 +174,7 @@ SILR <- function(A,k,kw,family){
 
   Sjoint <- rep(0,n*(k+sum(kw)))
   for(t in 1:T){
-    M <- A[,,t] - nu_p(Z %*% t(Z) + W[[t]] %*% t(W[[t]]))
+    M <- A[,,t] - g(Z %*% t(Z) + W[[t]] %*% t(W[[t]]))
     
     Lz <- rep(0,n*k)
     for(i in 1:n){
