@@ -117,7 +117,98 @@ SILR <- function(A,k,kw,family){
     grad0_z <- grad1_z
     Z1 <- Z0 + eta_z * grad0_z
   }
-  return(list(Z_init = Zr,W_init = Wr,Z_hat = Z1,W_hat = W1))
+
+  #Stage4: one-step for Z and Wt
+  Z <- Z1
+  W <- W1
+  Ijoint <- matrix(0,n*(k+sum(kw)),n*(k+sum(kw)))
+  for(t in 1:T){
+    mu <- nu_pp(Z %*% t(Z) + W[[t]] %*% t(W[[t]]))
+    
+    Lzz <- matrix(0,n*k,n*k)
+    for(i in 1:n)
+      for(j in 1:n){
+        if(i == j){
+          Lzz[((i-1)*k+1):(i*k),((j-1)*k+1):(j*k)] <- 3*mu[i,i] * Z[i,] %*% t(Z[i,])
+          for(jj in 1:n)
+            Lzz[((i-1)*k+1):(i*k),((j-1)*k+1):(j*k)] <- Lzz[((i-1)*k+1):(i*k),((j-1)*k+1):(j*k)] + mu[i,jj]*Z[jj,] %*% t(Z[jj,])
+        }
+        else
+          Lzz[((i-1)*k+1):(i*k),((j-1)*k+1):(j*k)] <- mu[i,j] * Z[j,] %*% t(Z[i,])
+      }
+    
+    Lzw <- matrix(0,n*k,n*kw[t])
+    for(i in 1:n)
+      for(j in 1:n){
+        if(i == j){
+          Lzw[((i-1)*k+1):(i*k),((j-1)*kw[t]+1):(j*kw[t])] <- 3*mu[i,i] * Z[i,] %*% t(W[[t]][i,])
+          for(jj in 1:n)
+            Lzw[((i-1)*k+1):(i*k),((j-1)*kw[t]+1):(j*kw[t])] <- Lzw[((i-1)*k+1):(i*k),((j-1)*kw[t]+1):(j*kw[t])] + mu[i,jj]*Z[jj,] %*% t(W[[t]][jj,])
+        }
+        else
+          Lzw[((i-1)*k+1):(i*k),((j-1)*kw[t]+1):(j*kw[t])] <- mu[i,j] * Z[j,] %*% t(W[[t]][i,])
+      }
+    
+    Lww <- matrix(0,n*kw[t],n*kw[t])
+    for(i in 1:n)
+      for(j in 1:n){
+        if(i == j){
+          Lww[((i-1)*kw[t]+1):(i*kw[t]),((j-1)*kw[t]+1):(j*kw[t])] <- 3*mu[i,i] * W[[t]][i,] %*% t(W[[t]][i,])
+          for(jj in 1:n)
+            Lww[((i-1)*kw[t]+1):(i*kw[t]),((j-1)*kw[t]+1):(j*kw[t])] <- Lww[((i-1)*kw[t]+1):(i*kw[t]),((j-1)*kw[t]+1):(j*kw[t])] + mu[i,jj]*W[[t]][jj,] %*% t(W[[t]][jj,])
+        }
+        else
+          Lww[((i-1)*kw[t]+1):(i*kw[t]),((j-1)*kw[t]+1):(j*kw[t])] <- mu[i,j] * W[[t]][j,] %*% t(W[[t]][i,])
+      }
+    
+    ind1 <- 1:(n*k)
+    ind2 <- (n*(k+cumsum(c(0,kw))[t])+1) : (n*(k+cumsum(c(0,kw))[t+1]))
+    Ijoint[ind1,ind1] <- Ijoint[ind1,ind1] + Lzz
+    Ijoint[ind2,ind2] <- Ijoint[ind2,ind2] + Lww
+    Ijoint[ind1,ind2] <- Ijoint[ind1,ind2] + Lzw 
+    Ijoint[ind2,ind1] <- Ijoint[ind2,ind1] + t(Lzw)
+  }
+
+  Sjoint <- rep(0,n*(k+sum(kw)))
+  for(t in 1:T){
+    M <- A[,,t] - nu_p(Z %*% t(Z) + W[[t]] %*% t(W[[t]]))
+    
+    Lz <- rep(0,n*k)
+    for(i in 1:n){
+      Lz[((i-1)*k+1):(i*k)] <- Z[i,] * M[i,i]
+      for(j in 1:n)
+        Lz[((i-1)*k+1):(i*k)] <- Lz[((i-1)*k+1):(i*k)] + Z[j,] * M[i,j]
+    }
+    
+    Lw <- rep(0,n*kw[t])
+    for(i in 1:n){
+      Lw[((i-1)*kw[t]+1):(i*kw[t])] <- W[[t]][i,] * M[i,i]
+      for(j in 1:n)
+        Lw[((i-1)*kw[t]+1):(i*kw[t])] <- Lw[((i-1)*kw[t]+1):(i*kw[t])] + W[[t]][j,] * M[i,j]
+    }
+    
+    ind1 <- 1:(n*k)
+    ind2 <- (n*(k+cumsum(c(0,kw))[t])+1) : (n*(k+cumsum(c(0,kw))[t+1]))
+    Sjoint[ind1] <- Sjoint[ind1] + Lz
+    Sjoint[ind2] <- Sjoint[ind2] + Lw
+  }
+  
+  eigI <- eigen(Ijoint)
+  rankI <- (n*k - k*(k-1)/2) + sum((n*kw - kw*(kw-1)/2))
+  Ipi <- eigI$vectors %*% diag(c(eigI$values[1:rankI]^-1,rep(0,n*(k+sum(kw))-rankI))) %*% t(eigI$vectors)
+  
+  v <- as.vector(t(Z))
+  for(t in 1:T)
+    v <- c(v,as.vector(t(W[[t]])))
+  v <- v + Ipi %*% Sjoint
+  
+  Z <- t(matrix(v[1:(n*k)],k,n))
+  W <- list()
+  for(t in 1:T){
+    ind2 <- (n*(k+cumsum(c(0,kw))[t])+1) : (n*(k+cumsum(c(0,kw))[t+1]))
+    W[[t]] <- t(matrix(v[ind2],kw[t],n))
+  }
+  return(list(Z_init = Zr,W_init = Wr,Z_hat = Z,W_hat = W))
 }
 
 #R function for estimating the latent dimensions
