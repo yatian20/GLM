@@ -32,6 +32,16 @@ status[Lattr$V2 == 2] <- 'associate'
 Law_k <- EST_k2(Law,'bernoulli')
 fit_Law <- SILR(Law,Law_k$est_k,Law_k$est_kw,'bernoulli')
 
+#compare with MultiNeSS
+Law_P <- Law != 0
+library(multiness)
+fit_Lawp <- multiness_fit(Law_P,model="logistic",self_loops=FALSE,tuning="adaptive",refit=TRUE,optim_opts=list(return_posns=TRUE))
+
+#compare with COSIE
+fit_Lawc <- MASE(Law,2)
+
+save(fit_Law,fit_Lawp,fit_Lawc,file = "lawyers.rda")
+
 #plot the estimates of Z colored by office
 Z_pca <- fit_Law$Z_hat %*% eigen(t(fit_Law$Z_hat) %*% fit_Law$Z_hat)$vectors
 Z_Law <- as.data.frame(Z_pca)
