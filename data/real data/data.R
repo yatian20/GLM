@@ -1,12 +1,11 @@
-#Data is available at https://www.stats.ox.ac.uk/~snijders/siena/Lazega_lawyers_data.htm
-Lwork <- read.table('ELwork.dat')
-Lfriend <- read.table('ELfriend.dat')
-Ladv <- read.table('ELadv.dat')
-Lattr <- read.table('ELattr.dat')
+# =============================================================================
+# LAWYERS DATA ANALYSIS
+# =============================================================================
 
-#You need to download the R file functions.R in your working path.
-source("functions.R")
-library(ggplot2)
+Lwork <- read.table('data/real data/ELwork.dat')
+Lfriend <- read.table('data/real data/ELfriend.dat')
+Ladv <- read.table('data/real data/ELadv.dat')
+Lattr <- read.table('data/real data/ELattr.dat')
 
 #obtain networks with n = 71 and T = 3
 Law <- array(0,dim = c(71,71,3))
@@ -29,6 +28,7 @@ status[Lattr$V2 == 1] <- 'partner'
 status[Lattr$V2 == 2] <- 'associate'
 
 #Fit Bernoulli model using proposed method
+source("code/functions.R")
 Law_k <- EST_k2(Law,'bernoulli')
 fit_Law <- SILR(Law,Law_k$est_k,Law_k$est_kw,'bernoulli')
 
@@ -43,6 +43,7 @@ fit_Lawc <- MASE(Law,2)
 save(fit_Law,fit_Lawp,fit_Lawc,file = "lawyers.rda")
 
 #plot the estimates of Z colored by office
+library(ggplot2)
 Z_pca <- fit_Law$Z_hat %*% eigen(t(fit_Law$Z_hat) %*% fit_Law$Z_hat)$vectors
 Z_Law <- as.data.frame(Z_pca)
 names(Z_Law) <- c("Z1","Z2")
