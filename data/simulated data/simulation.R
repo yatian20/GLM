@@ -1,7 +1,7 @@
 # =============================================================================
-# SIMULATED DATA GENERATION: BERNOULLI DISTRIBUTION - CASE (A)
+# A SINGLE SIMULATION FOR BERNOULLI DISTRIBUTION AND CASE (A)
 # =============================================================================
-# Generates simulated binary data from a Bernoulli distribution for Case (A).
+# Generates simulated binary data from a Bernoulli distribution and Case (A).
 # Serves as a template that can be adapted for other simulation scenarios.
 # The current implementation performs a single simulation. You can run the file repeatedly to estimate errors more accurately.
 
