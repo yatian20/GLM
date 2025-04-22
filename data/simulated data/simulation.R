@@ -51,4 +51,12 @@ for(t in 1:T){
 }
 
 save(A,file = "simulated_data.rda")
-  
+
+#estimate by the proposed method
+source("code/functions.R")
+est <- SILR(A,k,rep(k,T),'bernoulli')
+err <- NULL
+err <- c(err,sum((est$Z_init %*% t(est$Z_init) - Z %*% t(Z))^2)/n)
+err <- c(err,sum((est$Z_hat %*% t(est$Z_hat) - Z %*% t(Z))^2)/n)
+err <- c(err,sum((est$W_init[[1]] %*% t(est$W_init[[1]]) - W[[1]] %*% t(W[[1]]))^2)/n)
+err <- c(err,sum((est$W_hat[[1]] %*% t(est$W_hat[[1]]) - W[[1]] %*% t(W[[1]]))^2)/n)
