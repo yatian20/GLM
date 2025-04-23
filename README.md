@@ -1,7 +1,11 @@
-# This file provides explanations on the scripts. 
+# Efficient Analysis of Latent Spaces in Heterogeneous Networks
 
-1. functions.R contains R functions for implementing Algorithms 1-3 in the paper.
+This repository contains the code for the paper "Efficient Analysis of Latent Spaces in Heterogeneous Networks" by Yuang Tian, Jiajin Sun, and Yinqiu He.
+
+The sub-directory `code` contains R implementations of Algorithms 1-3 presented in the paper.
    
-2. simulation.R conducts one simulation repetition under Bernoulli distribution and Case (A) in the paper.
-   
-3. data.R reproduces the data analysis results in the paper.
+The sub-directory 'data' includes both real-world and simulated datasets, along with their analysis scripts.
+
+The sub-directory 'output' stores all simulation results and real data analysis outputs.
+
+The sub-directory 'manuscirpt' contains the LaTeX source files for the manuscript and associated figures.
