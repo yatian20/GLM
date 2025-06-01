@@ -1,11 +1,23 @@
 # Efficient Analysis of Latent Spaces in Heterogeneous Networks
 
+## Project Description
 This repository contains the code for the paper "Efficient Analysis of Latent Spaces in Heterogeneous Networks" by Yuang Tian, Jiajin Sun, and Yinqiu He.
 
-The sub-directory `code` contains R implementations of Algorithms 1-3 presented in the paper.
-   
-The sub-directory `data` includes both real-world and simulated datasets, along with their analysis scripts.
+## Repository Structure
 
-The sub-directory `output` stores all simulation results and real data analysis outputs.
+### Core Algorithms ('algorithms/')
+-'latent_dimensions_est.R': contains R implementations of Algorithms A.1-A.2 and 1-2 in the paper.
+-'latent_vectors_est.R': contains R implementation of Algorithm B.1 in the paper.
 
-The sub-directory `manuscirpt` contains the LaTeX source files for the manuscript and associated figures.
+### Simulation Studies ('simulation/')
+-'experiments.R'
+-'results/'
+-'plot.R'
+-'figures/'
+
+### Real Data Analysis ('real_data/')
+-'raw_data/'
+-'analyze.R'
+-'results/'
+-'plot.R'
+-'figures/'
