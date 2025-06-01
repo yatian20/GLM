@@ -1,4 +1,3 @@
-
 ##Simulation for the estimation of Z/Wt
 #fix n = 400, k = kt = 2; vary T = 5/10/20/40/80, Case A/B/C
 #Case A: Z and Wt are orthogonal, i.e. phi = rho = 0
