@@ -5,19 +5,19 @@ This repository contains the code for the paper "Efficient Analysis of Latent Sp
 
 ## Repository Structure
 
-### Core Algorithms ('algorithms/')
-- 'latent_dimensions_est.R': contains R implementations of Algorithms A.1-A.2 and 1-2 in the paper.
-- 'latent_vectors_est.R': contains R implementation of Algorithm B.1 in the paper.
+### Core Algorithms (`algorithms/`)
+- `latent_dimensions_est.R`: contains R implementations of Algorithms A.1-A.2 and 1-2 in the paper.
+- `latent_vectors_est.R`: contains R implementation of Algorithm B.1 in the paper.
 
-### Simulation Studies ('simulation/')
-- 'experiments.R'
-- 'results/'
-- 'plot.R'
-- 'figures/'
+### Simulation Studies (`simulation/`)
+- `experiments.R`
+- `results/`
+- `plot.R`
+- `figures/`
 
-### Real Data Analysis ('real_data/')
-- 'raw_data/'
-- 'analyze.R'
-- 'results/'
-- 'plot.R'
-- 'figures/'
+### Real Data Analysis (`real_data/`)
+- `raw_data/`
+- `analyze.R`
+- `results/`
+- `plot.R`
+- `figures/`
