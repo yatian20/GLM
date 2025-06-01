@@ -1,4 +1,5 @@
 library(ggplot2)
+setwd('GLM/simulation/results')
 
 ##Case A
 #Poisson
