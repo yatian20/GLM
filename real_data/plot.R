@@ -1,4 +1,5 @@
 library(ggplot2)
+load('GLM/real_data/results/lawyers.rda')
 
 ##plot the estimates of Z colored by office
 #SS-Refinement
