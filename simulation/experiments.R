@@ -4,6 +4,8 @@
 #Case B: Z and Wt are non-orthogonal with phi = 0.1, rho = 0.3
 #Case C: Z and 5 Wt are are orthogonal, others are same
 
+source('GLM/algorithms/latent_vectors_est.R')
+
 ##### Case A #####
 #Poisson model
 library(foreach)
