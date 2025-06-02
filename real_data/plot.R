@@ -1,7 +1,7 @@
 library(ggplot2)
 load('GLM/real_data/results/lawyers.rda')
 
-##plot the estimates of Z colored by office
+##Figure 4
 #SS-Refinement
 Z_pca <- fit_Law$Z_hat %*% eigen(t(fit_Law$Z_hat) %*% fit_Law$Z_hat)$vectors
 Z_Law <- as.data.frame(Z_pca)
@@ -50,7 +50,7 @@ pdf(file='Lawc_Z.pdf',width=4,height=3.9)
 fig
 dev.off()
 
-##plot the estimates of W1 colored by practice
+##Figure 5
 #SS-Refinement
 W1_pca <- fit_Law$W_hat[[1]] %*% eigen(t(fit_Law$W_hat[[1]]) %*% fit_Law$W_hat[[1]])$vectors
 W1_Law <- as.data.frame(W1_pca)
@@ -80,7 +80,7 @@ pdf(file='Lawp_W1.pdf',width=4,height=3.9)
 fig
 dev.off()
 
-##plot the estimates of W2 colored by status
+##Figure 6
 #SS-Refinement
 W2_pca <- fit_Law$W_hat[[2]] %*% eigen(t(fit_Law$W_hat[[2]]) %*% fit_Law$W_hat[[2]])$vectors
 W2_Law <- as.data.frame(W2_pca)
