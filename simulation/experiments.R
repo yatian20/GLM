@@ -5,6 +5,8 @@
 #Case C: Z and 5 Wt are are orthogonal, others are same
 
 source('GLM/algorithms/latent_vectors_est.R')
+#only shows T = 5 case as the primary example
+#results under other T values can be easily repeated by changing T <- 5 to other values 
 
 ##### Case A #####
 #Poisson model
