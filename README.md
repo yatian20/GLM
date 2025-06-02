@@ -11,7 +11,7 @@ This repository contains the implementation code for the paper "Efficient Analys
 
 ### Simulation Studies (`simulation/`)
 - `experiments.R`: Data generation and analysis under three distributions and Cases (A)-(C) (only present T = 5 as an example).
-- `results/`: Output files by `experiments.R`.
+- `results/`: Output files by `experiments.R` across T = 5/10/20/40/80.
 - `plot.R`: Visualization code for simulation results, producing Figures 1-3 and S1-S3 in the paper.
 - `figures/`: Output files by `plot.R`.
 
