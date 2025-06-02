@@ -1,7 +1,7 @@
 library(ggplot2)
 setwd('GLM/simulation/results')
 
-##Case A
+##Figure 1
 #Poisson
 load("P402A.rda")
 load("P412A.rda")
@@ -67,7 +67,7 @@ pdf(file='Simu_GA.pdf',width=4,height=3.8)
 fig
 dev.off()
 
-##Case B
+##Figure 2
 #Poisson
 load("P402B.rda")
 load("P412B.rda")
@@ -133,7 +133,7 @@ pdf(file='Simu_GB.pdf',width=4,height=3.8)
 fig
 dev.off()
 
-##Case C
+##Figure 3
 #Poisson
 load("P402C.rda")
 load("P412C.rda")
@@ -197,9 +197,7 @@ pdf(file='Simu_GC.pdf',width=4,height=3.8)
 fig
 dev.off()
 
-#### error of W1 ####
-
-##Case A
+##Figure S1
 #Poisson
 load("P402A.rda")
 load("P412A.rda")
@@ -265,7 +263,7 @@ pdf(file='SimuW_GA.pdf',width=4,height=3.8)
 fig
 dev.off()
 
-##Case B
+##Figure S2
 #Poisson
 load("P402B.rda")
 load("P412B.rda")
@@ -331,7 +329,7 @@ pdf(file='SimuW_GB.pdf',width=4,height=3.8)
 fig
 dev.off()
 
-##Case C
+##Figure S3
 #Poisson
 load("P402C.rda")
 load("P412C.rda")
