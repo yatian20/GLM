@@ -19,7 +19,7 @@ fig
 dev.off()
 
 #MultiNess
-Z_Lawp <- as.data.frame(fit_Lawp$V_hat[,2:3])
+Z_Lawp <- as.data.frame(fit_Lawp$V_hat[,2:1])
 names(Z_Lawp) <- c("Z1","Z2")
 Z_Lawp$office <- factor(office)
 Z_Lawp$practice <- factor(practice)
