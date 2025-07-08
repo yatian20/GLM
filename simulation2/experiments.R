@@ -1,4 +1,567 @@
 source('GLM/algorithms/latent_vectors_est.R')
+source('GLM/algorithms/latent_dimensions_est.R')
+
+##########################################################################
+##Simulation for the estimation of k/kt
+##########################################################################
+#fix n = 400; vary T = 5/10/20/40/80, k = kt = 2/3/4, Case A/B/C
+#only shows T = 80 and k = kt = 2 case as the primary example
+#results under other T and k values can be easily repeated by changing T <- 80 and k <- 2 to other values 
+
+##### Case A #####
+#Poisson model
+library(foreach)
+library(doParallel)
+rep <- 100
+cores <- 50
+cl <- makeCluster(cores)
+registerDoParallel(cl, cores=cores)
+EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+  n <- 400
+  T <- 80
+  k <- 2
+  
+  #generate Z
+  Z <- matrix(rnorm(10*n*k),10*n,k)
+  Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+  
+  #generate Wt's
+  Y <- Z
+  for(t in 1:T){
+    Wt <- matrix(rnorm(10*n*k),10*n,k)
+    Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+    Y <- cbind(Y,Wt)
+  }
+  Gram0 <- t(Y) %*% Y
+  
+  #add dependency
+  phi <- 0
+  rho <- 0
+  
+  Gram <- matrix(rho,1+T,1+T)
+  Gram[,1] <- phi
+  Gram[1,] <- phi
+  diag(Gram) <- 1
+  Gram <- kronecker(Gram,diag(rep(1,k)))
+  Gram <- (n/(2*sqrt(k)))*Gram
+  
+  EigG <- eigen(Gram)
+  EigG0 <- eigen(Gram0)
+  Y <- Y %*% (EigG0$vectors %*% diag(EigG0$values^{-1/2}) %*% t(EigG0$vectors)) %*% (EigG$vectors %*% diag(EigG$values^{1/2}) %*% t(EigG$vectors))
+  Z <- Y[,1:k]
+  W <- list()
+  for(t in 1:T)
+    W[[t]] <- Y[,(cumsum(rep(k,T+1))[t]+1):cumsum(rep(k,T+1))[t+1]]
+  
+  #generate A
+  P <- array(0,dim = c(n,n,T))
+  A <- array(0,dim = c(n,n,T))
+  for(t in 1:T){
+    P[,,t] <- exp(Z %*% t(Z) + W[[t]] %*% t(W[[t]]))
+    A[,,t] <- matrix(rpois(n*n,as.vector(P[,,t])),n,n)
+    A[,,t][upper.tri(A[,,t])] <- t(A[,,t])[upper.tri(A[,,t])]
+  }
+  
+  est <- EST_k(A,'poisson')
+  err <- c(est$est_k == k,all(est$est_kw + est$est_k == rep(2*k,T)))
+  return(err)
+}
+stopCluster(cl)
+colMeans(EST)
+
+#Bernoulli model
+library(foreach)
+library(doParallel)
+rep <- 100
+cores <- 50
+cl <- makeCluster(cores)
+registerDoParallel(cl, cores=cores)
+EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+  n <- 400
+  T <- 80
+  k <- 2
+  
+  #generate Z
+  Z <- matrix(rnorm(10*n*k),10*n,k)
+  Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+  
+  #generate Wt's
+  Y <- Z
+  for(t in 1:T){
+    Wt <- matrix(rnorm(10*n*k),10*n,k)
+    Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+    Y <- cbind(Y,Wt)
+  }
+  Gram0 <- t(Y) %*% Y
+  
+  #add dependency
+  phi <- 0
+  rho <- 0
+  
+  Gram <- matrix(rho,1+T,1+T)
+  Gram[,1] <- phi
+  Gram[1,] <- phi
+  diag(Gram) <- 1
+  Gram <- kronecker(Gram,diag(rep(1,k)))
+  Gram <- (n/(2*sqrt(k)))*Gram
+  
+  EigG <- eigen(Gram)
+  EigG0 <- eigen(Gram0)
+  Y <- Y %*% (EigG0$vectors %*% diag(EigG0$values^{-1/2}) %*% t(EigG0$vectors)) %*% (EigG$vectors %*% diag(EigG$values^{1/2}) %*% t(EigG$vectors))
+  Z <- Y[,1:k]
+  W <- list()
+  for(t in 1:T)
+    W[[t]] <- Y[,(cumsum(rep(k,T+1))[t]+1):cumsum(rep(k,T+1))[t+1]]
+  
+  #generate A
+  P <- array(0,dim = c(n,n,T))
+  A <- array(0,dim = c(n,n,T))
+  for(t in 1:T){
+    P[,,t] <- 1/(1 + exp(-Z %*% t(Z) - W[[t]] %*% t(W[[t]])))
+    A[,,t] <- matrix(rbinom(n*n,1,as.vector(P[,,t])),n,n)
+    A[,,t][upper.tri(A[,,t])] <- t(A[,,t])[upper.tri(A[,,t])]
+  }
+  
+  est <- EST_k(A,'bernoulli')
+  err <- c(est$est_k == k,all(est$est_kw + est$est_k == rep(2*k,T)))
+  return(err)
+}
+stopCluster(cl)
+colMeans(EST)
+
+#Gaussian model
+library(foreach)
+library(doParallel)
+rep <- 100
+cores <- 50
+cl <- makeCluster(cores)
+registerDoParallel(cl, cores=cores)
+EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+  n <- 400
+  T <- 80
+  k <- 2
+  
+  #generate Z
+  Z <- matrix(rnorm(10*n*k),10*n,k)
+  Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+  
+  #generate Wt's
+  Y <- Z
+  for(t in 1:T){
+    Wt <- matrix(rnorm(10*n*k),10*n,k)
+    Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+    Y <- cbind(Y,Wt)
+  }
+  Gram0 <- t(Y) %*% Y
+  
+  #add dependency
+  phi <- 0
+  rho <- 0
+  
+  Gram <- matrix(rho,1+T,1+T)
+  Gram[,1] <- phi
+  Gram[1,] <- phi
+  diag(Gram) <- 1
+  Gram <- kronecker(Gram,diag(rep(1,k)))
+  Gram <- (n/(2*sqrt(k)))*Gram
+  
+  EigG <- eigen(Gram)
+  EigG0 <- eigen(Gram0)
+  Y <- Y %*% (EigG0$vectors %*% diag(EigG0$values^{-1/2}) %*% t(EigG0$vectors)) %*% (EigG$vectors %*% diag(EigG$values^{1/2}) %*% t(EigG$vectors))
+  Z <- Y[,1:k]
+  W <- list()
+  for(t in 1:T)
+    W[[t]] <- Y[,(cumsum(rep(k,T+1))[t]+1):cumsum(rep(k,T+1))[t+1]]
+  
+  #generate A
+  P <- array(0,dim = c(n,n,T))
+  A <- array(0,dim = c(n,n,T))
+  for(t in 1:T){
+    P[,,t] <- Z %*% t(Z) + W[[t]] %*% t(W[[t]])
+    A[,,t] <- matrix(rnorm(n*n,as.vector(P[,,t])),n,n)
+    A[,,t][upper.tri(A[,,t])] <- t(A[,,t])[upper.tri(A[,,t])]
+  }
+  
+  est <- EST_k(A,'gaussian')
+  err <- c(est$est_k == k,all(est$est_kw + est$est_k == rep(2*k,T)))
+  return(err)
+}
+stopCluster(cl)
+colMeans(EST)
+
+##### Case B #####
+#Poisson model
+library(foreach)
+library(doParallel)
+rep <- 100
+cores <- 50
+cl <- makeCluster(cores)
+registerDoParallel(cl, cores=cores)
+EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+  n <- 400
+  T <- 80
+  k <- 2
+  
+  #generate Z
+  Z <- matrix(rnorm(10*n*k),10*n,k)
+  Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+  
+  #generate Wt's
+  Y <- Z
+  for(t in 1:T){
+    Wt <- matrix(rnorm(10*n*k),10*n,k)
+    Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+    Y <- cbind(Y,Wt)
+  }
+  Gram0 <- t(Y) %*% Y
+  
+  #add dependency
+  phi <- 0.1
+  rho <- 0.3
+  
+  Gram <- matrix(rho,1+T,1+T)
+  Gram[,1] <- phi
+  Gram[1,] <- phi
+  diag(Gram) <- 1
+  Gram <- kronecker(Gram,diag(rep(1,k)))
+  Gram <- (n/(2*sqrt(k)))*Gram
+  
+  EigG <- eigen(Gram)
+  EigG0 <- eigen(Gram0)
+  Y <- Y %*% (EigG0$vectors %*% diag(EigG0$values^{-1/2}) %*% t(EigG0$vectors)) %*% (EigG$vectors %*% diag(EigG$values^{1/2}) %*% t(EigG$vectors))
+  Z <- Y[,1:k]
+  W <- list()
+  for(t in 1:T)
+    W[[t]] <- Y[,(cumsum(rep(k,T+1))[t]+1):cumsum(rep(k,T+1))[t+1]]
+  
+  #generate A
+  P <- array(0,dim = c(n,n,T))
+  A <- array(0,dim = c(n,n,T))
+  for(t in 1:T){
+    P[,,t] <- exp(Z %*% t(Z) + W[[t]] %*% t(W[[t]]))
+    A[,,t] <- matrix(rpois(n*n,as.vector(P[,,t])),n,n)
+    A[,,t][upper.tri(A[,,t])] <- t(A[,,t])[upper.tri(A[,,t])]
+  }
+  
+  est <- EST_k(A,'poisson')
+  err <- c(est$est_k == k,all(est$est_kw + est$est_k == rep(2*k,T)))
+  return(err)
+}
+stopCluster(cl)
+colMeans(EST)
+
+#Bernoulli model
+library(foreach)
+library(doParallel)
+rep <- 100
+cores <- 50
+cl <- makeCluster(cores)
+registerDoParallel(cl, cores=cores)
+EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+  n <- 400
+  T <- 80
+  k <- 2
+  
+  #generate Z
+  Z <- matrix(rnorm(10*n*k),10*n,k)
+  Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+  
+  #generate Wt's
+  Y <- Z
+  for(t in 1:T){
+    Wt <- matrix(rnorm(10*n*k),10*n,k)
+    Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+    Y <- cbind(Y,Wt)
+  }
+  Gram0 <- t(Y) %*% Y
+  
+  #add dependency
+  phi <- 0.1
+  rho <- 0.3
+  
+  Gram <- matrix(rho,1+T,1+T)
+  Gram[,1] <- phi
+  Gram[1,] <- phi
+  diag(Gram) <- 1
+  Gram <- kronecker(Gram,diag(rep(1,k)))
+  Gram <- (n/(2*sqrt(k)))*Gram
+  
+  EigG <- eigen(Gram)
+  EigG0 <- eigen(Gram0)
+  Y <- Y %*% (EigG0$vectors %*% diag(EigG0$values^{-1/2}) %*% t(EigG0$vectors)) %*% (EigG$vectors %*% diag(EigG$values^{1/2}) %*% t(EigG$vectors))
+  Z <- Y[,1:k]
+  W <- list()
+  for(t in 1:T)
+    W[[t]] <- Y[,(cumsum(rep(k,T+1))[t]+1):cumsum(rep(k,T+1))[t+1]]
+  
+  #generate A
+  P <- array(0,dim = c(n,n,T))
+  A <- array(0,dim = c(n,n,T))
+  for(t in 1:T){
+    P[,,t] <- 1/(1 + exp(-Z %*% t(Z) - W[[t]] %*% t(W[[t]])))
+    A[,,t] <- matrix(rbinom(n*n,1,as.vector(P[,,t])),n,n)
+    A[,,t][upper.tri(A[,,t])] <- t(A[,,t])[upper.tri(A[,,t])]
+  }
+  
+  est <- EST_k(A,'bernoulli')
+  err <- c(est$est_k == k,all(est$est_kw + est$est_k == rep(2*k,T)))
+  return(err)
+}
+stopCluster(cl)
+colMeans(EST)
+
+#Gaussian model
+library(foreach)
+library(doParallel)
+rep <- 100
+cores <- 50
+cl <- makeCluster(cores)
+registerDoParallel(cl, cores=cores)
+EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+  n <- 400
+  T <- 80
+  k <- 2
+  
+  #generate Z
+  Z <- matrix(rnorm(10*n*k),10*n,k)
+  Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+  
+  #generate Wt's
+  Y <- Z
+  for(t in 1:T){
+    Wt <- matrix(rnorm(10*n*k),10*n,k)
+    Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+    Y <- cbind(Y,Wt)
+  }
+  Gram0 <- t(Y) %*% Y
+  
+  #add dependency
+  phi <- 0.1
+  rho <- 0.3
+  
+  Gram <- matrix(rho,1+T,1+T)
+  Gram[,1] <- phi
+  Gram[1,] <- phi
+  diag(Gram) <- 1
+  Gram <- kronecker(Gram,diag(rep(1,k)))
+  Gram <- (n/(2*sqrt(k)))*Gram
+  
+  EigG <- eigen(Gram)
+  EigG0 <- eigen(Gram0)
+  Y <- Y %*% (EigG0$vectors %*% diag(EigG0$values^{-1/2}) %*% t(EigG0$vectors)) %*% (EigG$vectors %*% diag(EigG$values^{1/2}) %*% t(EigG$vectors))
+  Z <- Y[,1:k]
+  W <- list()
+  for(t in 1:T)
+    W[[t]] <- Y[,(cumsum(rep(k,T+1))[t]+1):cumsum(rep(k,T+1))[t+1]]
+  
+  #generate A
+  P <- array(0,dim = c(n,n,T))
+  A <- array(0,dim = c(n,n,T))
+  for(t in 1:T){
+    P[,,t] <- Z %*% t(Z) + W[[t]] %*% t(W[[t]])
+    A[,,t] <- matrix(rnorm(n*n,as.vector(P[,,t])),n,n)
+    A[,,t][upper.tri(A[,,t])] <- t(A[,,t])[upper.tri(A[,,t])]
+  }
+  
+  est <- EST_k(A,'gaussian')
+  err <- c(est$est_k == k,all(est$est_kw + est$est_k == rep(2*k,T)))
+  return(err)
+}
+stopCluster(cl)
+colMeans(EST)
+
+##### Case C #####
+#Poisson model
+library(foreach)
+library(doParallel)
+rep <- 100
+cores <- 50
+cl <- makeCluster(cores)
+registerDoParallel(cl, cores=cores)
+EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+  n <- 400
+  T <- 80
+  k <- 2
+  
+  #generate Z
+  Z <- matrix(rnorm(10*n*k),10*n,k)
+  Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+  
+  #generate Wt's
+  Y <- Z
+  for(t in 1:5){
+    Wt <- matrix(rnorm(10*n*k),10*n,k)
+    Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+    Y <- cbind(Y,Wt)
+  }
+  Gram0 <- t(Y) %*% Y
+  
+  #add dependency
+  phi <- 0
+  rho <- 0
+  
+  Gram <- matrix(rho,6,6)
+  Gram[,1] <- phi
+  Gram[1,] <- phi
+  diag(Gram) <- 1
+  Gram <- kronecker(Gram,diag(rep(1,k)))
+  Gram <- (n/(2*sqrt(k)))*Gram
+  
+  EigG <- eigen(Gram)
+  EigG0 <- eigen(Gram0)
+  Y <- Y %*% (EigG0$vectors %*% diag(EigG0$values^{-1/2}) %*% t(EigG0$vectors)) %*% (EigG$vectors %*% diag(EigG$values^{1/2}) %*% t(EigG$vectors))
+  Z <- Y[,1:k]
+  W <- list()
+  for(t in 1:T){
+    if(t <= 5)
+      W[[t]] <- Y[,(cumsum(rep(k,T+1))[t]+1):cumsum(rep(k,T+1))[t+1]]
+    else
+      W[[t]] <- W[[5]]
+  }
+  
+  #generate A
+  P <- array(0,dim = c(n,n,T))
+  A <- array(0,dim = c(n,n,T))
+  for(t in 1:T){
+    P[,,t] <- exp(Z %*% t(Z) + W[[t]] %*% t(W[[t]]))
+    A[,,t] <- matrix(rpois(n*n,as.vector(P[,,t])),n,n)
+    A[,,t][upper.tri(A[,,t])] <- t(A[,,t])[upper.tri(A[,,t])]
+  }
+  
+  est <- EST_k(A,'poisson')
+  err <- c(est$est_k == k,all(est$est_kw + est$est_k == rep(2*k,T)))
+  return(err)
+}
+stopCluster(cl)
+colMeans(EST)
+
+#Bernoulli model
+library(foreach)
+library(doParallel)
+rep <- 100
+cores <- 50
+cl <- makeCluster(cores)
+registerDoParallel(cl, cores=cores)
+EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+  n <- 400
+  T <- 80
+  k <- 2
+  
+  #generate Z
+  Z <- matrix(rnorm(10*n*k),10*n,k)
+  Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+  
+  #generate Wt's
+  Y <- Z
+  for(t in 1:5){
+    Wt <- matrix(rnorm(10*n*k),10*n,k)
+    Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+    Y <- cbind(Y,Wt)
+  }
+  Gram0 <- t(Y) %*% Y
+  
+  #add dependency
+  phi <- 0
+  rho <- 0
+  
+  Gram <- matrix(rho,6,6)
+  Gram[,1] <- phi
+  Gram[1,] <- phi
+  diag(Gram) <- 1
+  Gram <- kronecker(Gram,diag(rep(1,k)))
+  Gram <- (n/(2*sqrt(k)))*Gram
+  
+  EigG <- eigen(Gram)
+  EigG0 <- eigen(Gram0)
+  Y <- Y %*% (EigG0$vectors %*% diag(EigG0$values^{-1/2}) %*% t(EigG0$vectors)) %*% (EigG$vectors %*% diag(EigG$values^{1/2}) %*% t(EigG$vectors))
+  Z <- Y[,1:k]
+  W <- list()
+  for(t in 1:T){
+    if(t <= 5)
+      W[[t]] <- Y[,(cumsum(rep(k,T+1))[t]+1):cumsum(rep(k,T+1))[t+1]]
+    else
+      W[[t]] <- W[[5]]
+  }
+  
+  #generate A
+  P <- array(0,dim = c(n,n,T))
+  A <- array(0,dim = c(n,n,T))
+  for(t in 1:T){
+    P[,,t] <- 1/(1 + exp(-Z %*% t(Z) - W[[t]] %*% t(W[[t]])))
+    A[,,t] <- matrix(rbinom(n*n,1,as.vector(P[,,t])),n,n)
+    A[,,t][upper.tri(A[,,t])] <- t(A[,,t])[upper.tri(A[,,t])]
+  }
+  
+  est <- EST_k(A,'bernoulli')
+  err <- c(est$est_k == k,all(est$est_kw + est$est_k == rep(2*k,T)))
+  return(err)
+}
+stopCluster(cl)
+colMeans(EST)
+
+#Gaussian model
+library(foreach)
+library(doParallel)
+rep <- 100
+cores <- 50
+cl <- makeCluster(cores)
+registerDoParallel(cl, cores=cores)
+EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+  n <- 400
+  T <- 80
+  k <- 2
+  
+  #generate Z
+  Z <- matrix(rnorm(10*n*k),10*n,k)
+  Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+  
+  #generate Wt's
+  Y <- Z
+  for(t in 1:5){
+    Wt <- matrix(rnorm(10*n*k),10*n,k)
+    Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+    Y <- cbind(Y,Wt)
+  }
+  Gram0 <- t(Y) %*% Y
+  
+  #add dependency
+  phi <- 0
+  rho <- 0
+  
+  Gram <- matrix(rho,6,6)
+  Gram[,1] <- phi
+  Gram[1,] <- phi
+  diag(Gram) <- 1
+  Gram <- kronecker(Gram,diag(rep(1,k)))
+  Gram <- (n/(2*sqrt(k)))*Gram
+  
+  EigG <- eigen(Gram)
+  EigG0 <- eigen(Gram0)
+  Y <- Y %*% (EigG0$vectors %*% diag(EigG0$values^{-1/2}) %*% t(EigG0$vectors)) %*% (EigG$vectors %*% diag(EigG$values^{1/2}) %*% t(EigG$vectors))
+  Z <- Y[,1:k]
+  W <- list()
+  for(t in 1:T){
+    if(t <= 5)
+      W[[t]] <- Y[,(cumsum(rep(k,T+1))[t]+1):cumsum(rep(k,T+1))[t+1]]
+    else
+      W[[t]] <- W[[5]]
+  }
+  
+  #generate A
+  P <- array(0,dim = c(n,n,T))
+  A <- array(0,dim = c(n,n,T))
+  for(t in 1:T){
+    P[,,t] <- Z %*% t(Z) + W[[t]] %*% t(W[[t]])
+    A[,,t] <- matrix(rnorm(n*n,as.vector(P[,,t])),n,n)
+    A[,,t][upper.tri(A[,,t])] <- t(A[,,t])[upper.tri(A[,,t])]
+  }
+  
+  est <- EST_k(A,'gaussian')
+  err <- c(est$est_k == k,all(est$est_kw + est$est_k == rep(2*k,T)))
+  return(err)
+}
+stopCluster(cl)
+colMeans(EST)
 
 ##########################################################################
 ##Comparison of Variants of Algorithm 2
