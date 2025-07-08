@@ -16,7 +16,7 @@ rep <- 100
 cores <- 50
 cl <- makeCluster(cores)
 registerDoParallel(cl, cores=cores)
-EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+P482Ak <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   n <- 400
   T <- 80
   k <- 2
@@ -67,7 +67,8 @@ EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   return(err)
 }
 stopCluster(cl)
-colMeans(EST)
+colMeans(P482Ak)
+save(P482Ak,file="P482Ak.rda")
 
 #Bernoulli model
 library(foreach)
@@ -76,7 +77,7 @@ rep <- 100
 cores <- 50
 cl <- makeCluster(cores)
 registerDoParallel(cl, cores=cores)
-EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+B482Ak <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   n <- 400
   T <- 80
   k <- 2
@@ -127,7 +128,8 @@ EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   return(err)
 }
 stopCluster(cl)
-colMeans(EST)
+colMeans(B482Ak)
+save(B482Ak,file="B482Ak.rda")
 
 #Gaussian model
 library(foreach)
@@ -136,7 +138,7 @@ rep <- 100
 cores <- 50
 cl <- makeCluster(cores)
 registerDoParallel(cl, cores=cores)
-EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+G482Ak <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   n <- 400
   T <- 80
   k <- 2
@@ -187,7 +189,8 @@ EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   return(err)
 }
 stopCluster(cl)
-colMeans(EST)
+colMeans(G482Ak)
+save(G482Ak,file="G482Ak.rda")
 
 ##### Case B #####
 #Poisson model
@@ -197,7 +200,7 @@ rep <- 100
 cores <- 50
 cl <- makeCluster(cores)
 registerDoParallel(cl, cores=cores)
-EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+P482Bk <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   n <- 400
   T <- 80
   k <- 2
@@ -248,7 +251,8 @@ EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   return(err)
 }
 stopCluster(cl)
-colMeans(EST)
+colMeans(P482Bk)
+save(P482Bk,file="P482Bk.rda")
 
 #Bernoulli model
 library(foreach)
@@ -257,7 +261,7 @@ rep <- 100
 cores <- 50
 cl <- makeCluster(cores)
 registerDoParallel(cl, cores=cores)
-EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+B482Bk <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   n <- 400
   T <- 80
   k <- 2
@@ -308,7 +312,8 @@ EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   return(err)
 }
 stopCluster(cl)
-colMeans(EST)
+colMeans(B482Bk)
+save(B482Bk,file="B482Bk.rda")
 
 #Gaussian model
 library(foreach)
@@ -317,7 +322,7 @@ rep <- 100
 cores <- 50
 cl <- makeCluster(cores)
 registerDoParallel(cl, cores=cores)
-EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+G482Bk <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   n <- 400
   T <- 80
   k <- 2
@@ -368,7 +373,8 @@ EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   return(err)
 }
 stopCluster(cl)
-colMeans(EST)
+colMeans(G482Bk)
+save(G482Bk,file="G482Bk.rda")
 
 ##### Case C #####
 #Poisson model
@@ -378,7 +384,7 @@ rep <- 100
 cores <- 50
 cl <- makeCluster(cores)
 registerDoParallel(cl, cores=cores)
-EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+P482Ck <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   n <- 400
   T <- 80
   k <- 2
@@ -433,7 +439,8 @@ EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   return(err)
 }
 stopCluster(cl)
-colMeans(EST)
+colMeans(P482Ck)
+save(P482Ck,file="P482Ck.rda")
 
 #Bernoulli model
 library(foreach)
@@ -442,7 +449,7 @@ rep <- 100
 cores <- 50
 cl <- makeCluster(cores)
 registerDoParallel(cl, cores=cores)
-EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+B482Ck <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   n <- 400
   T <- 80
   k <- 2
@@ -497,7 +504,8 @@ EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   return(err)
 }
 stopCluster(cl)
-colMeans(EST)
+colMeans(B482Ck)
+save(B482Ck,file="B482Ck.rda")
 
 #Gaussian model
 library(foreach)
@@ -506,7 +514,7 @@ rep <- 100
 cores <- 50
 cl <- makeCluster(cores)
 registerDoParallel(cl, cores=cores)
-EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
+G482Ck <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   n <- 400
   T <- 80
   k <- 2
@@ -561,7 +569,8 @@ EST <- foreach(i = 1:rep,.combine='rbind') %dopar% {
   return(err)
 }
 stopCluster(cl)
-colMeans(EST)
+colMeans(G482Ck)
+save(G482Ck,file="G482Ck.rda")
 
 ##########################################################################
 ##Comparison of Variants of Algorithm 2
