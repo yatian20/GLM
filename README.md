@@ -15,10 +15,16 @@ This repository contains the implementation code for the paper "Efficient Analys
 - `plot.R`: Visualization code for simulation results, producing Figures 1-3 and S1-S3 in the paper.
 - `figures/`: Output files by `plot.R`.
 
+### Additional Simulation Studies (`simulation2/`)
+- `experiments.R`: Data generation and analysis across different simulation settings.
+- `results/`: Output files by `experiments.R`.
+- `plot.R`: Visualization code for additional simulation results, producing Figures S4-S8 and Tables S1-S2 in the paper.
+- `figures/`: Output files by `plot.R`.
+
 ### Real Data Analysis (`real_data/`)
 - `raw_data/`: Lazega lawyers data (original source: https://www.stats.ox.ac.uk/~snijders/siena/Lazega_lawyers_data.htm). 
 - `analyze.R`: Data processing and analysis. 
 - `results/`: Output files by `analyze.R`.
 - `plot.R`: Visualization code for data analysis, producing Figures 4-6 in the paper.
 - `plot2.R`: Supplementary visualization code for data analysis, producing Figures S10-S12 and Tables S3-S4 in the paper.
-- `figures/`: Output files by `plot.R`.
+- `figures/`: Output files by `plot.R` and `plot2.R`.
