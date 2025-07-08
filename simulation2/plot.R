@@ -192,3 +192,17 @@ pdf(file='Simu_MG2.pdf',width=4,height=3.8)
 fig
 dev.off()
                                                                                                                   
+##Table S2
+#Bernoulli
+apply(B402C[,c(3,13:17)],2,mean)
+apply(B412C[,c(3,13:22)],2,mean)
+apply(B422C[,c(3,13:32)],2,mean)
+apply(B442C[,c(3,13:52)],2,mean)
+apply(B482C[,c(3,13:92)],2,mean)
+ 
+#Gaussian
+apply(G402C[,c(3,13:17)],2,mean)
+apply(G412C[,c(3,13:22)],2,mean)
+apply(G422C[,c(3,13:32)],2,mean)
+apply(G442C[,c(3,13:52)],2,mean)
+apply(G482C[,c(3,13:92)],2,mean)                                                                                                                     
