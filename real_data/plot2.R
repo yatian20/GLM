@@ -66,62 +66,60 @@ round(all_correlation_results,1)
 ######################################################################
 #Figure S10-S12: Pairwise scatterplots 
 ######################################################################
+plot_component_pairs <- function(U_hat_df, group_var, base_size = 16) {
+  # Rename component columns
+  comp_cols <- ncol(U_hat_df)
+  colnames(U_hat_df) <- paste0("Comp", seq_len(comp_cols))
+  
+  # Add group variable as factor
+  U_hat_df$Group <- factor(group_var)
+  
+  # Create ggpairs plot
+  fig <- ggpairs(
+    U_hat_df,
+    columns = 1:comp_cols,
+    mapping = aes(color = Group, shape = Group),
+    diag = list(continuous = "blankDiag"),
+    upper = "blank",
+    lower = list(continuous = wrap("points", size = 2)),
+    axisLabels = "none"
+  )
+  
+  # Remove axis text and ticks from all panels
+  for(i in 1:comp_cols){
+    fig[i,i] <- fig[i,i] + theme_void()
+  }
+  
+  # Add global theme
+  fig <- fig + theme_bw(base_size = base_size) +
+    theme(legend.position = "top", legend.title = element_blank())
+  
+  return(fig)
+}
 
-# Named list of grouping variables
-groupings <- list(
-  practice = practice,
-  office = office,
-  status = status
-)
-
-##################################################
-#Figure S10: pairwise scatterplots for Z 
-# Extract all components from V_hat (Shared)
+##Figure S10
 U_hat_df <- as.data.frame(fit_Lawp$V_hat)
-
 fig_dim = 11
-
-# Loop through each grouping and create + save plot
-for (group_name in names(groupings)) {
-  fig <- plot_component_pairs(U_hat_df, groupings[[group_name]])
-  print(fig)
+fig <- plot_component_pairs(U_hat_df, office)
   
-  pdf(file = paste0("Lawp_Z_pair_", group_name, ".pdf"), width = fig_dim, height = fig_dim)
-  print(fig)
-  dev.off()
-}
+pdf(file = paste0("Lawp_Z_pair_office.pdf"), width = fig_dim, height = fig_dim)
+fig
+dev.off()
 
-
-####################################################
-#Figure S11: pairwise scatterplots for W1
-# Extract all components from U_hat
+##Figure S11
 U_hat_df <- as.data.frame(fit_Lawp$U_hat[[1]])
+fig_dim = 5
+fig <- plot_component_pairs(U_hat_df, practice)
+ 
+pdf(file = paste0("Lawp_W1_pair_practice.pdf"), width = fig_dim, height = fig_dim)
+fig
+dev.off()
 
-fig_dim=5
-# Loop through each grouping and create + save plot
-for (group_name in names(groupings)) {
-  fig <- plot_component_pairs(U_hat_df, groupings[[group_name]])
-  print(fig)
-  
-  pdf(file = paste0("Lawp_W1_pair_", group_name, ".pdf"), width = fig_dim, height = fig_dim)
-  print(fig)
-  dev.off()
-}
-
-####################################################
-#Figure S12: pairwise scatterplots for W2  
-# Extract all components from U_hat
-kvis = all_dim[3]
-U_hat_df <- as.data.frame(fit_Lawp$U_hat[[2]][, 1:kvis])
-
+##Figure S12
+U_hat_df <- as.data.frame(fit_Lawp$U_hat[[2]])
 fig_dim = 6
-
-# Loop through each grouping and create + save plot
-for (group_name in names(groupings)) {
-  fig <- plot_component_pairs(U_hat_df, groupings[[group_name]])
-  print(fig)
-  
-  pdf(file = paste0("Lawp_W2_pair_", group_name, ".pdf"), width = fig_dim, height = fig_dim)
-  print(fig)
-  dev.off()
-}
+fig <- plot_component_pairs(U_hat_df, status)
+ 
+pdf(file = paste0("Lawp_W2_pair_status.pdf"), width = fig_dim, height = fig_dim)
+fig
+dev.off()
