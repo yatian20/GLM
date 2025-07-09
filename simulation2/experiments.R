@@ -2,7 +2,7 @@ source('GLM/algorithms/latent_vectors_est.R')
 source('GLM/algorithms/latent_dimensions_est.R')
 
 ##########################################################################
-##Simulation for the estimation of k/kt
+##Estimation of the latent dimensions k/kt (Simulation Study in Section B.3)
 ##########################################################################
 #fix n = 400; vary T = 5/10/20/40/80, k = kt = 2/3/4, Case A/B/C
 #only shows T = 80 and k = kt = 2 case as the primary example
@@ -573,7 +573,7 @@ colMeans(G482Ck)
 save(G482Ck,file="G482Ck.rda")
 
 ##########################################################################
-##Comparison of Variants of Algorithm 2
+##Comparison of Variants of Algorithm 2 (Simulation Study in Section G.2)
 ##########################################################################
 #fix n = 400, k = kt = 2, T=5; vary Case A/B/C, Bernoulli/Gaussian/Poisson distribution
 
@@ -988,7 +988,7 @@ colMeans(G402B)
 save(G402B,file="G402B.rda")
 
 ##########################################################################
-##Details for MultiNeSS and MultiNeSS+ under Case C
+##Details for MultiNeSS and MultiNeSS+ under Case C (Simulation Study in Section G.3)
 ##########################################################################
 #fix n = 400, k = kt = 2; vary T = 5/10/20/40/80, Bernoulli/Gaussian distribution
 #only shows T = 80 case as the primary example
