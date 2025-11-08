@@ -9,7 +9,13 @@ The ethnography, organizational and network analyses of this case are available 
 
 ## Background
 
-What do corporate lawyers do? Litigation and corporate work. Division of work and interdependencies. Three offices, no departments, built-in pressures to grow, intake and assignment rules. Partners and associates: hierarchy, up or out rule, billing targets. Partnership agreement (sharing benefits equally, 90% exclusion rule, governance structure, elusive committee system) and incompleteness of the contracts. Informal, unwritten rules (ex: no moonlighting, no investment in buildings, no nepotism, no borrowing to pay partners, etc.). Huge incentives to behave opportunistically ; thus the dataset is appropriate for the study of social processes that make cooperation among rival partners possible.
+- What do corporate lawyers do? Litigation and corporate work.
+- Division of work and interdependencies.
+- Three offices, no departments, built-in pressures to grow, intake and assignment rules.
+- Partners and associates: hierarchy, up or out rule, billing targets.
+- Partnership agreement (sharing benefits equally, 90% exclusion rule, governance structure, elusive committee system) and incompleteness of the contracts.
+- Informal, unwritten rules (ex: no moonlighting, no investment in buildings, no nepotism, no borrowing to pay partners, etc.).
+- Huge incentives to behave opportunistically ; thus the dataset is appropriate for the study of social processes that make cooperation among rival partners possible.
 
 ## Data Collection
 
@@ -40,3 +46,4 @@ The three networks refer to cowork, friendship, and advice. The first 36 respond
 ## References
 
 - Emmanuel Lazega, *The Collegial Phenomenon: The Social Mechanisms of Cooperation Among Peers in a Corporate Law Partnership*, Oxford University Press (2001).
+- Tom A.B. Snijders, Philippa E. Pattison, Garry L. Robins, and Mark S. Handcock. New specifications for exponential random graph models. *Sociological Methodology* (2006), 99-153.
