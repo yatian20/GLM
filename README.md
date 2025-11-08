@@ -22,7 +22,7 @@ This repository contains the implementation code for the paper "Efficient Analys
 - `figures/`: Output files by `plot.R`.
 
 ### Real Data Analysis (`real_data/`)
-- `raw_data/`: Lazega lawyers data (original source: https://www.stats.ox.ac.uk/~snijders/siena/Lazega_lawyers_data.htm). 
+- `raw_data/`: Lazega lawyers data and documentation (original source: https://www.stats.ox.ac.uk/~snijders/siena/Lazega_lawyers_data.htm). 
 - `analyze.R`: Data processing and analysis for Section 6. 
 - `results/`: Output files by `analyze.R`.
 - `plot.R`: Visualization code for data analysis, producing Figures 4-6 in the paper.
