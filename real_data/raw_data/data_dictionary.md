@@ -1,4 +1,6 @@
-# Description lawyers data Lazega <span style="font-size: 0.8em; color: #666; font-weight: normal;">The following information is copied from the original data source:</span>
+# Description lawyers data Lazega 
+
+*The following information is copied from the original data source: https://www.stats.ox.ac.uk/~snijders/siena/Lazega_lawyers_data.htm*
 
 This data set comes from a network study of corporate law partnership that was carried out in a Northeastern US corporate law firm, referred to as SG&R, 1988-1991 in New England. It includes (among others) measurements of networks among the 71 attorneys (partners and associates) of this firm, i.e. their strong-coworker network, advice network, friendship network, and indirect control networks. Various members' attributes are also part of the dataset, including seniority, formal status, office in which they work, gender, lawschool attended, individual performance measurements (hours worked, fees brought in), attitudes concerning various management policy options, etc.
 
