@@ -1,12 +1,12 @@
 # Efficient Analysis of Latent Spaces in Heterogeneous Networks
 
 ## Project Description
-This repository contains the implementation code for the paper "Efficient Analysis of Latent Spaces in Heterogeneous Networks" by Yuang Tian, Jiajin Sun, and Yinqiu He.
+This repository contains the implementation code for the paper "Efficient Analysis of Latent Spaces in Heterogeneous Networks".
 
 ## Repository Structure
 
 ### Core Algorithms (`algorithms/`)
-- `latent_vectors_est.R`: Implements Algorithms A.1-A.2 and 1-2 proposed in the paper, and a compared method MASE under COSIE model.
+- `latent_vectors_est.R`: Implements Algorithms A.1-A.2 and 1-2 proposed in the paper, and the algorithm for Section L in the Supplementary Material, and the compared method of MASE under COSIE model.
 - `latent_dimensions_est.R`: Implements Algorithm B.1 proposed in the paper.
 
 ### Simulation Studies (`simulation/`)
@@ -16,15 +16,17 @@ This repository contains the implementation code for the paper "Efficient Analys
 - `figures/`: Output files by `plot.R`.
 
 ### Additional Simulation Studies (`simulation2/`)
-- `experiments.R`: Data generation and analysis for Sections B.3, G.2 and G.3 in the Supplementary Material. 
+- `experiments.R`: Data generation and analysis for Sections B.3, G.2, G.3 and L.2 in the Supplementary Material. 
 - `results/`: Output files by `experiments.R`.
-- `plot.R`: Visualization code for additional simulation results, producing Figures S4-S8 and Tables S1-S2 in the Supplementary Material.
+- `plot.R`: Visualization code for additional simulation results, producing Figures S4-S8, S13-14, and Tables S1-S2 in the Supplementary Material.
 - `figures/`: Output files by `plot.R`.
 
 ### Real Data Analysis (`real_data/`)
 - `raw_data/`: Lazega lawyers data and documentation (original source: https://www.stats.ox.ac.uk/~snijders/siena/Lazega_lawyers_data.htm). 
 - `analyze.R`: Data processing and analysis for Section 6. 
-- `results/`: Output files by `analyze.R`.
+- `analyze_SecL.R`: Data processing and analysis for Supplementary Material Section L. 
+- `results/`: Output files by `analyze.R` and `analyze_SecL.R`.
 - `plot.R`: Visualization code for data analysis, producing Figures 4-6 in the paper.
 - `plot2.R`: Supplementary visualization code for data analysis, producing Figures S10-S12 and Tables S3-S4 in the Supplementary Material.
-- `figures/`: Output files by `plot.R` and `plot2.R`.
+- `plot_SecL.R`: Supplementary visualization code for real data analysis link prediction, producing Figure S15 in the Supplementary Material.
+- `figures/`: Output files by `plot.R`, `plot2.R`, `plot_SecL.R`.
