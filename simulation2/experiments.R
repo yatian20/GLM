@@ -1207,3 +1207,1050 @@ G482C <- foreach(i = 1:rep,.combine='rbind') %dopar% {
 stopCluster(cl)
 colMeans(G482C)
 save(G482C,file="G482C.rda")
+
+
+
+
+
+
+
+
+
+
+
+##########################################################################
+## Link prediction for SS-refinement and MultiNeSS+ (Simulation Study in Section L.2)
+##########################################################################
+suppressPackageStartupMessages({
+  library(multiness)
+  library(Matrix)
+  library(doParallel)
+  library(foreach)
+})
+
+##### Case A  #####
+scenario_tag <- "berA"   # change to "berA", "berB", or "berC" correspondingly
+n            <- 400
+k            <- 2
+rep          <- 100
+cutoffs      <- seq(0.01, 0.99, by = 0.02)   # 50 thresholds
+ncut         <- length(cutoffs)
+pi_obs       <- 0.9                           # observation prob for Omega
+cores        <- min(13, parallel::detectCores())
+
+phi  <- 0;   rho  <- 0
+
+mnplus_refit_metrics <- function(A0, Omega, eta = 5, max_rank = 20, verbose = FALSE) {
+  stopifnot(length(dim(A0)) == 3, dim(A0)[1] == dim(A0)[2])
+  n <- dim(A0)[1]; m <- dim(A0)[3]
+  
+  MP_log <- Omega == 1
+  
+  fit <- multiness::multiness_fit(
+    A          = A0,
+    model      = "logistic",
+    self_loops = FALSE,
+    refit      = TRUE,
+    tuning     = "adaptive",
+    tuning_opts = list(),
+    optim_opts  = list(
+      missing_pattern = MP_log,
+      max_rank        = max_rank,
+      check_obj       = FALSE,
+      verbose         = verbose,
+      eta             = eta
+    )
+  )
+  
+  if (!is.matrix(fit$F_hat) || length(fit$G_hat) != m)
+    stop("MN+: malformed fit (F_hat/G_hat)")
+  
+  pred <- array(0, dim = c(n, n, m))
+  for (t in 1:m) {
+    M_t       <- fit$F_hat + fit$G_hat[[t]]
+    pred[,,t] <- 1 / (1 + exp(-M_t))
+    if (any(!is.finite(pred[,,t]))) stop("MN+: non-finite predictions")
+  }
+  
+  pos_mask <- (Omega == 0) & (A0 == 1)
+  neg_mask <- (Omega == 0) & (A0 == 0)
+  n_pos    <- sum(pos_mask)
+  n_neg    <- sum(neg_mask)
+  if (n_pos == 0 || n_neg == 0) stop("MN+: no positives or negatives in held-out set")
+  
+  tpr <- numeric(ncut)
+  fpr <- numeric(ncut)
+  for (i in 1:ncut) {
+    thr      <- cutoffs[i]
+    pred_bin <- (pred > thr)
+    tpr[i]   <- sum(pos_mask & pred_bin) / n_pos
+    fpr[i]   <- sum(neg_mask & pred_bin) / n_neg
+  }
+  
+  c(tpr, fpr)
+}
+
+split_res <- function(M, ncut) {
+  # each row is c( MN+ (2*ncut) , SS-refinement & oracle (4*ncut) )
+  nm_mn   <- 2 * ncut
+  nm_silr <- 4 * ncut
+  stopifnot(ncol(M) == (nm_mn + nm_silr))
+  list(
+    mn = M[, 1:nm_mn, drop = FALSE],
+    sl = M[, (nm_mn + 1):(nm_mn + nm_silr), drop = FALSE]
+  )
+}
+
+##### Block 1: T = 5 #####
+
+T <- 5
+
+set.seed(123)
+Z <- matrix(rnorm(10*n*k), 10*n, k)
+Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+
+Ystar <- Z
+for (t in 1:T) {
+  Wt <- matrix(rnorm(10*n*k), 10*n, k)
+  Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+  Ystar <- cbind(Ystar, Wt)
+}
+Gram0 <- t(Ystar) %*% Ystar
+
+
+Gram <- matrix(rho, 1+T, 1+T)
+Gram[,1] <- phi
+Gram[1,] <- phi
+diag(Gram) <- 1
+Gram <- kronecker(Gram, diag(rep(1,k)))
+Gram <- (n/(2*sqrt(k))) * Gram
+
+EigG  <- eigen(Gram)
+EigG0 <- eigen(Gram0)
+Ystar <- Ystar %*% (EigG0$vectors %*% diag(EigG0$values^(-1/2)) %*% t(EigG0$vectors)) %*%
+  (EigG$vectors  %*% diag(EigG$values^( 1/2))  %*% t(EigG$vectors))
+Z <- Ystar[,1:k]
+W <- vector("list", T)
+for (t in 1:T)
+  W[[t]] <- Ystar[,(cumsum(rep(k, T+1))[t] + 1):cumsum(rep(k, T+1))[t + 1]]
+# if (T > 5) {
+#   Ystar <- Ystar[, 1:cumsum(rep(k, T+1))[5 + 1]]
+#   for (t in 6:T) {
+#     W[[t]] <- W[[5]]
+#     Ystar  <- cbind(Ystar, W[[5]])
+#   }
+# }
+
+cl5 <- makeCluster(cores)
+registerDoParallel(cl5, cores = cores)
+clusterEvalQ(cl5, {
+  library(multiness)
+  source("GLM/algorithms/latent_vectors_est.R")  # <-- make sure path is correct
+  NULL
+})
+
+res_mix_T5 <- foreach(realization = 1:rep,
+                      .combine = "rbind",
+                      .packages = c("multiness"),
+                      .errorhandling = "stop") %dopar% {
+                        set.seed(realization)
+                        
+                        P     <- array(0, dim = c(n, n, T))
+                        A0    <- array(0, dim = c(n, n, T))
+                        Omega <- array(0, dim = c(n, n, T))
+                        
+                        for (tt in 1:T) {
+                          Omega[,,tt] <- matrix(rbinom(n*n, 1, pi_obs), n, n)
+                          P[,,tt]     <- 1/(1 + exp(-Z %*% t(Z) - W[[tt]] %*% t(W[[tt]])))
+                          A0[,,tt]    <- matrix(rbinom(n*n, 1, as.vector(P[,,tt])), n, n)
+                          A0[,,tt][upper.tri(A0[,,tt])]       <- t(A0[,,tt])[upper.tri(A0[,,tt])]
+                          Omega[,,tt][upper.tri(Omega[,,tt])] <- t(Omega[,,tt])[upper.tri(Omega[,,tt])]
+                        }
+                        
+                        ## ---- MN+ ----
+                        mn_vec <- mnplus_refit_metrics(A0, Omega, eta = 5, max_rank = 20, verbose = FALSE)
+                        
+                        ## ---- SS-refinement ----
+                        A <- A0 * Omega
+                        est <- SILR_pred4(A, k, rep(k, T), 'bernoulli', Omega, pi_obs)
+                        
+                        pred_1 <- array(0, dim = c(n, n, T))
+                        for (tt in 1:T) {
+                          pred_1[,,tt] <- 1/(1 + exp(-est$Z_hat  %*% t(est$Z_hat)  - est$W_hat[[tt]]  %*% t(est$W_hat[[tt]])))
+                        }
+                        
+                        pos_mask <- (Omega == 0) & (A0 == 1)
+                        neg_mask <- (Omega == 0) & (A0 == 0)
+                        n_pos    <- sum(pos_mask)
+                        n_neg    <- sum(neg_mask)
+                        if (n_pos == 0 || n_neg == 0) stop("Stop: no positives or negatives in held-out set")
+                        
+                        pred_err_1_tp <- pred_err_1_fp <- oracle_pred_err_tp <- oracle_pred_err_fp <- numeric(ncut)
+                        
+                        for (i in 1:ncut) {
+                          thr <- cutoffs[i]
+                          pred1_bin <- (pred_1 > thr)
+                          P_bin     <- (P     > thr)
+                          
+                          pred_err_1_tp[i]     <- sum(pos_mask & pred1_bin) / n_pos
+                          pred_err_1_fp[i]     <- sum(neg_mask & pred1_bin) / n_neg
+                          oracle_pred_err_tp[i] <- sum(pos_mask & P_bin)    / n_pos
+                          oracle_pred_err_fp[i] <- sum(neg_mask & P_bin)    / n_neg
+                        }
+                        
+                        silr_vec <- c(pred_err_1_tp, pred_err_1_fp,
+                                      oracle_pred_err_tp, oracle_pred_err_fp)
+                        
+                        ## Return MN+ || SS concatenated
+                        c(mn_vec, silr_vec)
+                      }
+
+stopCluster(cl5)
+
+## Split and save T=5 outputs
+sp5 <- split_res(res_mix_T5, ncut)
+Err_multiness_refit_T5 <- sp5$mn
+Resultpred4_T5         <- sp5$sl
+
+obj_mn_T5 <- sprintf("MN+_%s_T5", scenario_tag)
+assign(obj_mn_T5, Err_multiness_refit_T5)
+save(list = obj_mn_T5,
+     file = sprintf("LkPdct_MN+_%s_T5.rda", scenario_tag))
+
+obj_silr_T5 <- sprintf("SS_%s_T5", scenario_tag)
+assign(obj_silr_T5, Resultpred4_T5)
+save(list = obj_silr_T5,
+     file = sprintf("LkPdct_SS_%s_T5.rda", scenario_tag))
+
+
+##### Block 2: T = 80 #####
+T <- 80
+
+set.seed(123)
+Z <- matrix(rnorm(10*n*k), 10*n, k)
+Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+
+Ystar <- Z
+for (t in 1:T) {
+  Wt <- matrix(rnorm(10*n*k), 10*n, k)
+  Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+  Ystar <- cbind(Ystar, Wt)
+}
+Gram0 <- t(Ystar) %*% Ystar
+
+
+Gram <- matrix(rho, 1+T, 1+T)
+Gram[,1] <- phi
+Gram[1,] <- phi
+diag(Gram) <- 1
+Gram <- kronecker(Gram, diag(rep(1,k)))
+Gram <- (n/(2*sqrt(k))) * Gram
+
+EigG  <- eigen(Gram)
+EigG0 <- eigen(Gram0)
+Ystar <- Ystar %*% (EigG0$vectors %*% diag(EigG0$values^(-1/2)) %*% t(EigG0$vectors)) %*%
+  (EigG$vectors  %*% diag(EigG$values^( 1/2))  %*% t(EigG$vectors))
+Z <- Ystar[,1:k]
+W <- vector("list", T)
+for (t in 1:T)
+  W[[t]] <- Ystar[,(cumsum(rep(k, T+1))[t] + 1):cumsum(rep(k, T+1))[t + 1]]
+# if (T > 5) {
+#   Ystar <- Ystar[, 1:cumsum(rep(k, T+1))[5 + 1]]
+#   for (t in 6:T) {
+#     W[[t]] <- W[[5]]
+#     Ystar  <- cbind(Ystar, W[[5]])
+#   }
+# }
+
+cl80 <- makeCluster(cores)
+registerDoParallel(cl80, cores = cores)
+clusterEvalQ(cl80, {
+  library(multiness)
+  source("GLM/algorithms/latent_vectors_est.R")  # <-- make sure path is correct
+  NULL
+})
+
+res_mix_T80 <- foreach(realization = 1:rep,
+                       .combine = "rbind",
+                       .packages = c("multiness"),
+                       .errorhandling = "stop") %dopar% {
+                         set.seed(realization)
+                         
+                         P     <- array(0, dim = c(n, n, T))
+                         A0    <- array(0, dim = c(n, n, T))
+                         Omega <- array(0, dim = c(n, n, T))
+                         
+                         for (tt in 1:T) {
+                           Omega[,,tt] <- matrix(rbinom(n*n, 1, pi_obs), n, n)
+                           P[,,tt]     <- 1/(1 + exp(-Z %*% t(Z) - W[[tt]] %*% t(W[[tt]])))
+                           A0[,,tt]    <- matrix(rbinom(n*n, 1, as.vector(P[,,tt])), n, n)
+                           A0[,,tt][upper.tri(A0[,,tt])]       <- t(A0[,,tt])[upper.tri(A0[,,tt])]
+                           Omega[,,tt][upper.tri(Omega[,,tt])] <- t(Omega[,,tt])[upper.tri(Omega[,,tt])]
+                         }
+                         
+                         ## MN+
+                         mn_vec <- mnplus_refit_metrics(A0, Omega, eta = 5, max_rank = 20, verbose = FALSE)
+                         
+                         ## SS-hunting & refinement 
+                         A <- A0 * Omega
+                         est <- SILR_pred4(A, k, rep(k, T), 'bernoulli', Omega, pi_obs)
+                         
+                         pred_1 <- array(0, dim = c(n, n, T))
+                         for (tt in 1:T) {
+                           pred_1[,,tt] <- 1/(1 + exp(-est$Z_hat  %*% t(est$Z_hat)  - est$W_hat[[tt]]  %*% t(est$W_hat[[tt]])))
+                         }
+                         
+                         pos_mask <- (Omega == 0) & (A0 == 1)
+                         neg_mask <- (Omega == 0) & (A0 == 0)
+                         n_pos    <- sum(pos_mask)
+                         n_neg    <- sum(neg_mask)
+                         if (n_pos == 0 || n_neg == 0) stop("Stop: no positives or negatives in held-out set")
+                         
+                         pred_err_1_tp <- pred_err_1_fp <- oracle_pred_err_tp <- oracle_pred_err_fp <- numeric(ncut)
+                         
+                         for (i in 1:ncut) {
+                           thr <- cutoffs[i]
+                           pred1_bin <- (pred_1 > thr)
+                           P_bin     <- (P     > thr)
+                           
+                           pred_err_1_tp[i]     <- sum(pos_mask & pred1_bin) / n_pos
+                           pred_err_1_fp[i]     <- sum(neg_mask & pred1_bin) / n_neg
+                           oracle_pred_err_tp[i] <- sum(pos_mask & P_bin)    / n_pos
+                           oracle_pred_err_fp[i] <- sum(neg_mask & P_bin)    / n_neg
+                         }
+                         
+                         silr_vec <- c(pred_err_1_tp, pred_err_1_fp,
+                                       oracle_pred_err_tp, oracle_pred_err_fp)
+                         
+                         c(mn_vec, silr_vec)
+                       }
+
+stopCluster(cl80)
+
+sp80 <- split_res(res_mix_T80, ncut)
+Err_multiness_refit_T80 <- sp80$mn
+Resultpred4_T80         <- sp80$sl
+
+obj_mn_T80 <- sprintf("MN+_%s_T80", scenario_tag)
+assign(obj_mn_T80, Err_multiness_refit_T80)
+save(list = obj_mn_T80,
+     file = sprintf("LkPdct_MN+_%s_T80.rda", scenario_tag))
+
+obj_silr_T80 <- sprintf("SS_%s_T80", scenario_tag)
+assign(obj_silr_T80, Resultpred4_T80)
+save(list = obj_silr_T80,
+     file = sprintf("LkPdct_SS_%s_T80.rda", scenario_tag))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##### Case B  #####
+scenario_tag <- "berB"   # change to "berA", "berB", or "berC" correspondingly
+n            <- 400
+k            <- 2
+rep          <- 100
+cutoffs      <- seq(0.01, 0.99, by = 0.02)   # 50 thresholds
+ncut         <- length(cutoffs)
+pi_obs       <- 0.9                           # observation prob for Omega
+cores        <- min(13, parallel::detectCores())
+
+phi  <- 0.1;   rho  <- 0.3
+
+mnplus_refit_metrics <- function(A0, Omega, eta = 5, max_rank = 20, verbose = FALSE) {
+  stopifnot(length(dim(A0)) == 3, dim(A0)[1] == dim(A0)[2])
+  n <- dim(A0)[1]; m <- dim(A0)[3]
+  
+  MP_log <- Omega == 1
+  
+  fit <- multiness::multiness_fit(
+    A          = A0,
+    model      = "logistic",
+    self_loops = FALSE,
+    refit      = TRUE,
+    tuning     = "adaptive",
+    tuning_opts = list(),
+    optim_opts  = list(
+      missing_pattern = MP_log,
+      max_rank        = max_rank,
+      check_obj       = FALSE,
+      verbose         = verbose,
+      eta             = eta
+    )
+  )
+  
+  if (!is.matrix(fit$F_hat) || length(fit$G_hat) != m)
+    stop("MN+: malformed fit (F_hat/G_hat)")
+  
+  pred <- array(0, dim = c(n, n, m))
+  for (t in 1:m) {
+    M_t       <- fit$F_hat + fit$G_hat[[t]]
+    pred[,,t] <- 1 / (1 + exp(-M_t))
+    if (any(!is.finite(pred[,,t]))) stop("MN+: non-finite predictions")
+  }
+  
+  pos_mask <- (Omega == 0) & (A0 == 1)
+  neg_mask <- (Omega == 0) & (A0 == 0)
+  n_pos    <- sum(pos_mask)
+  n_neg    <- sum(neg_mask)
+  if (n_pos == 0 || n_neg == 0) stop("MN+: no positives or negatives in held-out set")
+  
+  tpr <- numeric(ncut)
+  fpr <- numeric(ncut)
+  for (i in 1:ncut) {
+    thr      <- cutoffs[i]
+    pred_bin <- (pred > thr)
+    tpr[i]   <- sum(pos_mask & pred_bin) / n_pos
+    fpr[i]   <- sum(neg_mask & pred_bin) / n_neg
+  }
+  
+  c(tpr, fpr)
+}
+
+split_res <- function(M, ncut) {
+  nm_mn   <- 2 * ncut
+  nm_silr <- 4 * ncut
+  stopifnot(ncol(M) == (nm_mn + nm_silr))
+  list(
+    mn = M[, 1:nm_mn, drop = FALSE],
+    sl = M[, (nm_mn + 1):(nm_mn + nm_silr), drop = FALSE]
+  )
+}
+
+##### Block 1: T = 5 #####
+
+T <- 5
+
+set.seed(123)
+Z <- matrix(rnorm(10*n*k), 10*n, k)
+Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+
+Ystar <- Z
+for (t in 1:T) {
+  Wt <- matrix(rnorm(10*n*k), 10*n, k)
+  Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+  Ystar <- cbind(Ystar, Wt)
+}
+Gram0 <- t(Ystar) %*% Ystar
+
+
+Gram <- matrix(rho, 1+T, 1+T)
+Gram[,1] <- phi
+Gram[1,] <- phi
+diag(Gram) <- 1
+Gram <- kronecker(Gram, diag(rep(1,k)))
+Gram <- (n/(2*sqrt(k))) * Gram
+
+EigG  <- eigen(Gram)
+EigG0 <- eigen(Gram0)
+Ystar <- Ystar %*% (EigG0$vectors %*% diag(EigG0$values^(-1/2)) %*% t(EigG0$vectors)) %*%
+  (EigG$vectors  %*% diag(EigG$values^( 1/2))  %*% t(EigG$vectors))
+Z <- Ystar[,1:k]
+W <- vector("list", T)
+for (t in 1:T)
+  W[[t]] <- Ystar[,(cumsum(rep(k, T+1))[t] + 1):cumsum(rep(k, T+1))[t + 1]]
+# if (T > 5) {
+#   Ystar <- Ystar[, 1:cumsum(rep(k, T+1))[5 + 1]]
+#   for (t in 6:T) {
+#     W[[t]] <- W[[5]]
+#     Ystar  <- cbind(Ystar, W[[5]])
+#   }
+# }
+
+cl5 <- makeCluster(cores)
+registerDoParallel(cl5, cores = cores)
+clusterEvalQ(cl5, {
+  library(multiness)
+  source("GLM/algorithms/latent_vectors_est.R")  # <-- make sure path is correct
+  NULL
+})
+
+res_mix_T5 <- foreach(realization = 1:rep,
+                      .combine = "rbind",
+                      .packages = c("multiness"),
+                      .errorhandling = "stop") %dopar% {
+                        set.seed(realization)
+                        
+                        P     <- array(0, dim = c(n, n, T))
+                        A0    <- array(0, dim = c(n, n, T))
+                        Omega <- array(0, dim = c(n, n, T))
+                        
+                        for (tt in 1:T) {
+                          Omega[,,tt] <- matrix(rbinom(n*n, 1, pi_obs), n, n)
+                          P[,,tt]     <- 1/(1 + exp(-Z %*% t(Z) - W[[tt]] %*% t(W[[tt]])))
+                          A0[,,tt]    <- matrix(rbinom(n*n, 1, as.vector(P[,,tt])), n, n)
+                          A0[,,tt][upper.tri(A0[,,tt])]       <- t(A0[,,tt])[upper.tri(A0[,,tt])]
+                          Omega[,,tt][upper.tri(Omega[,,tt])] <- t(Omega[,,tt])[upper.tri(Omega[,,tt])]
+                        }
+                        
+                        ## ---- MN+ ----
+                        mn_vec <- mnplus_refit_metrics(A0, Omega, eta = 5, max_rank = 20, verbose = FALSE)
+                        
+                        ## ---- SS-hunting & refinement
+                        A <- A0 * Omega
+                        est <- SILR_pred4(A, k, rep(k, T), 'bernoulli', Omega, pi_obs)
+                        
+                        pred_1 <- array(0, dim = c(n, n, T))
+                        for (tt in 1:T) {
+                          pred_1[,,tt] <- 1/(1 + exp(-est$Z_hat  %*% t(est$Z_hat)  - est$W_hat[[tt]]  %*% t(est$W_hat[[tt]])))
+                        }
+                        
+                        pos_mask <- (Omega == 0) & (A0 == 1)
+                        neg_mask <- (Omega == 0) & (A0 == 0)
+                        n_pos    <- sum(pos_mask)
+                        n_neg    <- sum(neg_mask)
+                        if (n_pos == 0 || n_neg == 0) stop("Stop: no positives or negatives in held-out set")
+                        
+                        pred_err_1_tp <- pred_err_1_fp <- oracle_pred_err_tp <- oracle_pred_err_fp <- numeric(ncut)
+                        
+                        for (i in 1:ncut) {
+                          thr <- cutoffs[i]
+                          pred1_bin <- (pred_1 > thr)
+                          P_bin     <- (P     > thr)
+                          
+                          pred_err_1_tp[i]     <- sum(pos_mask & pred1_bin) / n_pos
+                          pred_err_1_fp[i]     <- sum(neg_mask & pred1_bin) / n_neg
+                          oracle_pred_err_tp[i] <- sum(pos_mask & P_bin)    / n_pos
+                          oracle_pred_err_fp[i] <- sum(neg_mask & P_bin)    / n_neg
+                        }
+                        
+                        silr_vec <- c(pred_err_1_tp, pred_err_1_fp,
+                                      oracle_pred_err_tp, oracle_pred_err_fp)
+                        
+                        ## Return MN+ || SS concatenated
+                        c(mn_vec, silr_vec)
+                      }
+
+stopCluster(cl5)
+
+## Split and save T=5 outputs
+sp5 <- split_res(res_mix_T5, ncut)
+Err_multiness_refit_T5 <- sp5$mn
+Resultpred4_T5         <- sp5$sl
+
+obj_mn_T5 <- sprintf("MN+_%s_T5", scenario_tag)
+assign(obj_mn_T5, Err_multiness_refit_T5)
+save(list = obj_mn_T5,
+     file = sprintf("LkPdct_MN+_%s_T5.rda", scenario_tag))
+
+obj_silr_T5 <- sprintf("SS_%s_T5", scenario_tag)
+assign(obj_silr_T5, Resultpred4_T5)
+save(list = obj_silr_T5,
+     file = sprintf("LkPdct_SS_%s_T5.rda", scenario_tag))
+
+
+##### Block 2: T = 80 #####
+T <- 80
+
+set.seed(123)
+Z <- matrix(rnorm(10*n*k), 10*n, k)
+Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+
+Ystar <- Z
+for (t in 1:T) {
+  Wt <- matrix(rnorm(10*n*k), 10*n, k)
+  Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+  Ystar <- cbind(Ystar, Wt)
+}
+Gram0 <- t(Ystar) %*% Ystar
+
+
+Gram <- matrix(rho, 1+T, 1+T)
+Gram[,1] <- phi
+Gram[1,] <- phi
+diag(Gram) <- 1
+Gram <- kronecker(Gram, diag(rep(1,k)))
+Gram <- (n/(2*sqrt(k))) * Gram
+
+EigG  <- eigen(Gram)
+EigG0 <- eigen(Gram0)
+Ystar <- Ystar %*% (EigG0$vectors %*% diag(EigG0$values^(-1/2)) %*% t(EigG0$vectors)) %*%
+  (EigG$vectors  %*% diag(EigG$values^( 1/2))  %*% t(EigG$vectors))
+Z <- Ystar[,1:k]
+W <- vector("list", T)
+for (t in 1:T)
+  W[[t]] <- Ystar[,(cumsum(rep(k, T+1))[t] + 1):cumsum(rep(k, T+1))[t + 1]]
+# if (T > 5) {
+#   Ystar <- Ystar[, 1:cumsum(rep(k, T+1))[5 + 1]]
+#   for (t in 6:T) {
+#     W[[t]] <- W[[5]]
+#     Ystar  <- cbind(Ystar, W[[5]])
+#   }
+# }
+
+cl80 <- makeCluster(cores)
+registerDoParallel(cl80, cores = cores)
+clusterEvalQ(cl80, {
+  library(multiness)
+  source("GLM/algorithms/latent_vectors_est.R")  # <-- make sure path is correct
+  NULL
+})
+
+res_mix_T80 <- foreach(realization = 1:rep,
+                       .combine = "rbind",
+                       .packages = c("multiness"),
+                       .errorhandling = "stop") %dopar% {
+                         set.seed(realization)
+                         
+                         P     <- array(0, dim = c(n, n, T))
+                         A0    <- array(0, dim = c(n, n, T))
+                         Omega <- array(0, dim = c(n, n, T))
+                         
+                         for (tt in 1:T) {
+                           Omega[,,tt] <- matrix(rbinom(n*n, 1, pi_obs), n, n)
+                           P[,,tt]     <- 1/(1 + exp(-Z %*% t(Z) - W[[tt]] %*% t(W[[tt]])))
+                           A0[,,tt]    <- matrix(rbinom(n*n, 1, as.vector(P[,,tt])), n, n)
+                           A0[,,tt][upper.tri(A0[,,tt])]       <- t(A0[,,tt])[upper.tri(A0[,,tt])]
+                           Omega[,,tt][upper.tri(Omega[,,tt])] <- t(Omega[,,tt])[upper.tri(Omega[,,tt])]
+                         }
+                         
+                         ## MN+
+                         mn_vec <- mnplus_refit_metrics(A0, Omega, eta = 5, max_rank = 20, verbose = FALSE)
+                         
+                         ## SS
+                         A <- A0 * Omega
+                         est <- SILR_pred4(A, k, rep(k, T), 'bernoulli', Omega, pi_obs)
+                         
+                         pred_1 <- array(0, dim = c(n, n, T))
+                         for (tt in 1:T) {
+                           pred_1[,,tt] <- 1/(1 + exp(-est$Z_hat  %*% t(est$Z_hat)  - est$W_hat[[tt]]  %*% t(est$W_hat[[tt]])))
+                         }
+                         
+                         pos_mask <- (Omega == 0) & (A0 == 1)
+                         neg_mask <- (Omega == 0) & (A0 == 0)
+                         n_pos    <- sum(pos_mask)
+                         n_neg    <- sum(neg_mask)
+                         if (n_pos == 0 || n_neg == 0) stop("Stop: no positives or negatives in held-out set")
+                         
+                         pred_err_1_tp <- pred_err_1_fp <- oracle_pred_err_tp <- oracle_pred_err_fp <- numeric(ncut)
+                         
+                         for (i in 1:ncut) {
+                           thr <- cutoffs[i]
+                           pred1_bin <- (pred_1 > thr)
+                           P_bin     <- (P     > thr)
+                           
+                           pred_err_1_tp[i]     <- sum(pos_mask & pred1_bin) / n_pos
+                           pred_err_1_fp[i]     <- sum(neg_mask & pred1_bin) / n_neg
+                           oracle_pred_err_tp[i] <- sum(pos_mask & P_bin)    / n_pos
+                           oracle_pred_err_fp[i] <- sum(neg_mask & P_bin)     / n_neg
+                         }
+                         
+                         silr_vec <- c(pred_err_1_tp, pred_err_1_fp,
+                                       oracle_pred_err_tp, oracle_pred_err_fp)
+                         
+                         c(mn_vec, silr_vec)
+                       }
+
+stopCluster(cl80)
+
+sp80 <- split_res(res_mix_T80, ncut)
+Err_multiness_refit_T80 <- sp80$mn
+Resultpred4_T80         <- sp80$sl
+
+obj_mn_T80 <- sprintf("MN+_%s_T80", scenario_tag)
+assign(obj_mn_T80, Err_multiness_refit_T80)
+save(list = obj_mn_T80,
+     file = sprintf("LkPdct_MN+_%s_T80.rda", scenario_tag))
+
+obj_silr_T80 <- sprintf("SS_%s_T80", scenario_tag)
+assign(obj_silr_T80, Resultpred4_T80)
+save(list = obj_silr_T80,
+     file = sprintf("LkPdct_SS_%s_T80.rda", scenario_tag))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##### Case C  #####
+scenario_tag <- "berC"   # change to "berA", "berB", or "berC" correspondingly
+n            <- 400
+k            <- 2
+rep          <- 100
+cutoffs      <- seq(0.01, 0.99, by = 0.02)   # 50 thresholds
+ncut         <- length(cutoffs)
+pi_obs       <- 0.9                           # observation prob for Omega
+cores        <- min(13, parallel::detectCores())
+
+phi  <- 0;   rho  <- 0
+
+mnplus_refit_metrics <- function(A0, Omega, eta = 5, max_rank = 20, verbose = FALSE) {
+  stopifnot(length(dim(A0)) == 3, dim(A0)[1] == dim(A0)[2])
+  n <- dim(A0)[1]; m <- dim(A0)[3]
+  
+  MP_log <- Omega == 1
+  
+  fit <- multiness::multiness_fit(
+    A          = A0,
+    model      = "logistic",
+    self_loops = FALSE,
+    refit      = TRUE,
+    tuning     = "adaptive",
+    tuning_opts = list(),
+    optim_opts  = list(
+      missing_pattern = MP_log,
+      max_rank        = max_rank,
+      check_obj       = FALSE,
+      verbose         = verbose,
+      eta             = eta
+    )
+  )
+  
+  if (!is.matrix(fit$F_hat) || length(fit$G_hat) != m)
+    stop("MN+: malformed fit (F_hat/G_hat)")
+  
+  pred <- array(0, dim = c(n, n, m))
+  for (t in 1:m) {
+    M_t       <- fit$F_hat + fit$G_hat[[t]]
+    pred[,,t] <- 1 / (1 + exp(-M_t))
+    if (any(!is.finite(pred[,,t]))) stop("MN+: non-finite predictions")
+  }
+  
+  pos_mask <- (Omega == 0) & (A0 == 1)
+  neg_mask <- (Omega == 0) & (A0 == 0)
+  n_pos    <- sum(pos_mask)
+  n_neg    <- sum(neg_mask)
+  if (n_pos == 0 || n_neg == 0) stop("MN+: no positives or negatives in held-out set")
+  
+  tpr <- numeric(ncut)
+  fpr <- numeric(ncut)
+  for (i in 1:ncut) {
+    thr      <- cutoffs[i]
+    pred_bin <- (pred > thr)
+    tpr[i]   <- sum(pos_mask & pred_bin) / n_pos
+    fpr[i]   <- sum(neg_mask & pred_bin) / n_neg
+  }
+  
+  c(tpr, fpr)
+}
+
+split_res <- function(M, ncut) {
+  nm_mn   <- 2 * ncut
+  nm_silr <- 4 * ncut
+  stopifnot(ncol(M) == (nm_mn + nm_silr))
+  list(
+    mn = M[, 1:nm_mn, drop = FALSE],
+    sl = M[, (nm_mn + 1):(nm_mn + nm_silr), drop = FALSE]
+  )
+}
+
+##### Block 1: T = 5 #####
+
+T <- 5
+
+set.seed(123)
+Z <- matrix(rnorm(10*n*k), 10*n, k)
+Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+
+Ystar <- Z
+for (t in 1:T) {
+  Wt <- matrix(rnorm(10*n*k), 10*n, k)
+  Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+  Ystar <- cbind(Ystar, Wt)
+}
+Gram0 <- t(Ystar) %*% Ystar
+
+
+Gram <- matrix(rho, 1+T, 1+T)
+Gram[,1] <- phi
+Gram[1,] <- phi
+diag(Gram) <- 1
+Gram <- kronecker(Gram, diag(rep(1,k)))
+Gram <- (n/(2*sqrt(k))) * Gram
+
+EigG  <- eigen(Gram)
+EigG0 <- eigen(Gram0)
+Ystar <- Ystar %*% (EigG0$vectors %*% diag(EigG0$values^(-1/2)) %*% t(EigG0$vectors)) %*%
+  (EigG$vectors  %*% diag(EigG$values^( 1/2))  %*% t(EigG$vectors))
+Z <- Ystar[,1:k]
+W <- vector("list", T)
+for (t in 1:T)
+  W[[t]] <- Ystar[,(cumsum(rep(k, T+1))[t] + 1):cumsum(rep(k, T+1))[t + 1]]
+if (T > 5) {
+  Ystar <- Ystar[, 1:cumsum(rep(k, T+1))[5 + 1]]
+  for (t in 6:T) {
+    W[[t]] <- W[[5]]
+    Ystar  <- cbind(Ystar, W[[5]])
+  }
+}
+
+cl5 <- makeCluster(cores)
+registerDoParallel(cl5, cores = cores)
+clusterEvalQ(cl5, {
+  library(multiness)
+  source("GLM/algorithms/latent_vectors_est.R")  # <-- make sure path is correct
+  NULL
+})
+
+res_mix_T5 <- foreach(realization = 1:rep,
+                      .combine = "rbind",
+                      .packages = c("multiness"),
+                      .errorhandling = "stop") %dopar% {
+                        set.seed(realization)
+                        
+                        P     <- array(0, dim = c(n, n, T))
+                        A0    <- array(0, dim = c(n, n, T))
+                        Omega <- array(0, dim = c(n, n, T))
+                        
+                        for (tt in 1:T) {
+                          Omega[,,tt] <- matrix(rbinom(n*n, 1, pi_obs), n, n)
+                          P[,,tt]     <- 1/(1 + exp(-Z %*% t(Z) - W[[tt]] %*% t(W[[tt]])))
+                          A0[,,tt]    <- matrix(rbinom(n*n, 1, as.vector(P[,,tt])), n, n)
+                          A0[,,tt][upper.tri(A0[,,tt])]       <- t(A0[,,tt])[upper.tri(A0[,,tt])]
+                          Omega[,,tt][upper.tri(Omega[,,tt])] <- t(Omega[,,tt])[upper.tri(Omega[,,tt])]
+                        }
+                        
+                        ## ---- MN+
+                        mn_vec <- mnplus_refit_metrics(A0, Omega, eta = 5, max_rank = 20, verbose = FALSE)
+                        
+                        ## ---- SS
+                        A <- A0 * Omega
+                        est <- SILR_pred4(A, k, rep(k, T), 'bernoulli', Omega, pi_obs)
+                        
+                        pred_1 <- array(0, dim = c(n, n, T))
+                        for (tt in 1:T) {
+                          pred_1[,,tt] <- 1/(1 + exp(-est$Z_hat  %*% t(est$Z_hat)  - est$W_hat[[tt]]  %*% t(est$W_hat[[tt]])))
+                        }
+                        
+                        pos_mask <- (Omega == 0) & (A0 == 1)
+                        neg_mask <- (Omega == 0) & (A0 == 0)
+                        n_pos    <- sum(pos_mask)
+                        n_neg    <- sum(neg_mask)
+                        if (n_pos == 0 || n_neg == 0) stop("Stop: no positives or negatives in held-out set")
+                        
+                        pred_err_1_tp <- pred_err_1_fp <- oracle_pred_err_tp <- oracle_pred_err_fp <- numeric(ncut)
+                        
+                        for (i in 1:ncut) {
+                          thr <- cutoffs[i]
+                          pred1_bin <- (pred_1 > thr)
+                          P_bin     <- (P     > thr)
+                          
+                          pred_err_1_tp[i]     <- sum(pos_mask & pred1_bin) / n_pos
+                          pred_err_1_fp[i]     <- sum(neg_mask & pred1_bin) / n_neg
+                          oracle_pred_err_tp[i] <- sum(pos_mask & P_bin)    / n_pos
+                          oracle_pred_err_fp[i] <- sum(neg_mask & P_bin)    / n_neg
+                        }
+                        
+                        silr_vec <- c(pred_err_1_tp, pred_err_1_fp,
+                                      oracle_pred_err_tp, oracle_pred_err_fp)
+                        
+                        ## Return MN+ || SS concatenated
+                        c(mn_vec, silr_vec)
+                      }
+
+stopCluster(cl5)
+
+## Split and save T=5 outputs
+sp5 <- split_res(res_mix_T5, ncut)
+Err_multiness_refit_T5 <- sp5$mn
+Resultpred4_T5         <- sp5$sl
+
+obj_mn_T5 <- sprintf("MN+_%s_T5", scenario_tag)
+assign(obj_mn_T5, Err_multiness_refit_T5)
+save(list = obj_mn_T5,
+     file = sprintf("LkPdct_MN+_%s_T5.rda", scenario_tag))
+
+obj_silr_T5 <- sprintf("SS_%s_T5", scenario_tag)
+assign(obj_silr_T5, Resultpred4_T5)
+save(list = obj_silr_T5,
+     file = sprintf("LkPdct_SS_%s_T5.rda", scenario_tag))
+
+
+##### Block 2: T = 80 #####
+T <- 80
+
+set.seed(123)
+Z <- matrix(rnorm(10*n*k), 10*n, k)
+Z <- Z[apply(Z^2,1,sum) < k,][1:n,]
+
+Ystar <- Z
+for (t in 1:T) {
+  Wt <- matrix(rnorm(10*n*k), 10*n, k)
+  Wt <- Wt[apply(Wt^2,1,sum) < k,][1:n,]
+  Ystar <- cbind(Ystar, Wt)
+}
+Gram0 <- t(Ystar) %*% Ystar
+
+
+Gram <- matrix(rho, 1+T, 1+T)
+Gram[,1] <- phi
+Gram[1,] <- phi
+diag(Gram) <- 1
+Gram <- kronecker(Gram, diag(rep(1,k)))
+Gram <- (n/(2*sqrt(k))) * Gram
+
+EigG  <- eigen(Gram)
+EigG0 <- eigen(Gram0)
+Ystar <- Ystar %*% (EigG0$vectors %*% diag(EigG0$values^(-1/2)) %*% t(EigG0$vectors)) %*%
+  (EigG$vectors  %*% diag(EigG$values^( 1/2))  %*% t(EigG$vectors))
+Z <- Ystar[,1:k]
+W <- vector("list", T)
+for (t in 1:T)
+  W[[t]] <- Ystar[,(cumsum(rep(k, T+1))[t] + 1):cumsum(rep(k, T+1))[t + 1]]
+if (T > 5) {
+  Ystar <- Ystar[, 1:cumsum(rep(k, T+1))[5 + 1]]
+  for (t in 6:T) {
+    W[[t]] <- W[[5]]
+    Ystar  <- cbind(Ystar, W[[5]])
+  }
+}
+
+cl80 <- makeCluster(cores)
+registerDoParallel(cl80, cores = cores)
+clusterEvalQ(cl80, {
+  library(multiness)
+  source("GLM/algorithms/latent_vectors_est.R")  # <-- make sure path is correct
+  NULL
+})
+
+res_mix_T80 <- foreach(realization = 1:rep,
+                       .combine = "rbind",
+                       .packages = c("multiness"),
+                       .errorhandling = "stop") %dopar% {
+                         set.seed(realization)
+                         
+                         P     <- array(0, dim = c(n, n, T))
+                         A0    <- array(0, dim = c(n, n, T))
+                         Omega <- array(0, dim = c(n, n, T))
+                         
+                         for (tt in 1:T) {
+                           Omega[,,tt] <- matrix(rbinom(n*n, 1, pi_obs), n, n)
+                           P[,,tt]     <- 1/(1 + exp(-Z %*% t(Z) - W[[tt]] %*% t(W[[tt]])))
+                           A0[,,tt]    <- matrix(rbinom(n*n, 1, as.vector(P[,,tt])), n, n)
+                           A0[,,tt][upper.tri(A0[,,tt])]       <- t(A0[,,tt])[upper.tri(A0[,,tt])]
+                           Omega[,,tt][upper.tri(Omega[,,tt])] <- t(Omega[,,tt])[upper.tri(Omega[,,tt])]
+                         }
+                         
+                         ## MN+
+                         mn_vec <- mnplus_refit_metrics(A0, Omega, eta = 5, max_rank = 20, verbose = FALSE)
+                         
+                         ## SS
+                         A <- A0 * Omega
+                         est <- SILR_pred4(A, k, rep(k, T), 'bernoulli', Omega, pi_obs)
+                         
+                         pred_1 <- array(0, dim = c(n, n, T))
+                         for (tt in 1:T) {
+                           pred_1[,,tt] <- 1/(1 + exp(-est$Z_hat  %*% t(est$Z_hat)  - est$W_hat[[tt]]  %*% t(est$W_hat[[tt]])))
+                         }
+                         
+                         pos_mask <- (Omega == 0) & (A0 == 1)
+                         neg_mask <- (Omega == 0) & (A0 == 0)
+                         n_pos    <- sum(pos_mask)
+                         n_neg    <- sum(neg_mask)    
+                         if (n_pos == 0 || n_neg == 0) stop("Stop: no positives or negatives in held-out set")
+                         
+                         pred_err_1_tp <- pred_err_1_fp <- oracle_pred_err_tp <- oracle_pred_err_fp <- numeric(ncut)
+                         
+                         for (i in 1:ncut) {
+                           thr <- cutoffs[i]
+                           pred1_bin <- (pred_1 > thr)
+                           P_bin     <- (P     > thr)
+                           
+                           pred_err_1_tp[i]     <- sum(pos_mask & pred1_bin) / n_pos
+                           pred_err_1_fp[i]     <- sum(neg_mask & pred1_bin) / n_neg
+                           oracle_pred_err_tp[i] <- sum(pos_mask & P_bin)    / n_pos
+                           oracle_pred_err_fp[i] <- sum(neg_mask & P_bin)    / n_neg
+                         }
+                         
+                         silr_vec <- c(pred_err_1_tp, pred_err_1_fp,
+                                       oracle_pred_err_tp, oracle_pred_err_fp)
+                         
+                         c(mn_vec, silr_vec)
+                       }
+
+stopCluster(cl80)
+
+sp80 <- split_res(res_mix_T80, ncut)
+Err_multiness_refit_T80 <- sp80$mn
+Resultpred4_T80         <- sp80$sl
+
+obj_mn_T80 <- sprintf("MN+_%s_T80", scenario_tag)
+assign(obj_mn_T80, Err_multiness_refit_T80)
+save(list = obj_mn_T80,
+     file = sprintf("LkPdct_MN+_%s_T80.rda", scenario_tag))
+
+obj_silr_T80 <- sprintf("SS_%s_T80", scenario_tag)
+assign(obj_silr_T80, Resultpred4_T80)
+save(list = obj_silr_T80,
+     file = sprintf("LkPdct_SS_%s_T80.rda", scenario_tag))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

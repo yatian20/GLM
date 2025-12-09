@@ -239,3 +239,127 @@ load('P484Ck.rda')
 c(mean(apply(B482Ak,1,all)),mean(apply(B483Ak,1,all)),mean(apply(B484Ak,1,all)),mean(apply(G482Ak,1,all)),mean(apply(G483Ak,1,all)),mean(apply(G484Ak,1,all)),mean(apply(P482Ak,1,all)),mean(apply(P483Ak,1,all)),mean(apply(P484Ak,1,all)))
 c(mean(apply(B482Bk,1,all)),mean(apply(B483Bk,1,all)),mean(apply(B484Bk,1,all)),mean(apply(G482Bk,1,all)),mean(apply(G483Bk,1,all)),mean(apply(G484Bk,1,all)),mean(apply(P482Bk,1,all)),mean(apply(P483Bk,1,all)),mean(apply(P484Bk,1,all)))
 c(mean(apply(B482Ck,1,all)),mean(apply(B483Ck,1,all)),mean(apply(B484Ck,1,all)),mean(apply(G482Ck,1,all)),mean(apply(G483Ck,1,all)),mean(apply(G484Ck,1,all)),mean(apply(P482Ck,1,all)),mean(apply(P483Ck,1,all)),mean(apply(P484Ck,1,all))) 
+
+
+
+
+
+
+
+## Figures S13 and S14
+## ============================================================
+## Six ROC plots (berA, berB, berC) × (T=5, T=80)
+## Inputs (files under GLM/simulation2/results/):
+##   LkPdct_MN+_<scenario>_T<T>.rda   -> object: MNplus_<scenario>_T<T>
+##   LkPdct_SS_<scenario>_T<T>.rda    -> object: SS_<scenario>_T<T>
+## Layouts:
+##   MNplus_*   : [1:ncut]=MN+ TPR, [(ncut+1):(2*ncut)]=MN+ FPR
+##   SS_*       : [1:ncut]=SS-refinement TPR, [ncut+1:2*ncut]=SS-refinement FPR,
+##                 [2*ncut+1:3*ncut]=Oracle TPR, [3*ncut+1:4*ncut]=Oracle FPR
+## Output:
+##   plot_simupred4_<scenario>_mean_T<T>_pi09_MNplus_refit_only.pdf
+## ============================================================
+
+get_silr_curves <- function(M) {
+  # M: reps x (4*ncut)
+  stopifnot(is.matrix(M), ncol(M) %% 4L == 0L)
+  ncut  <- ncol(M) %/% 4L
+  mmean <- apply(M, 2, mean, na.rm = TRUE)
+  list(
+    prop = list( # Proposed (SS refinement)
+      tpr = mmean[1:ncut],
+      fpr = mmean[(ncut + 1):(2L * ncut)]
+    ),
+    orac = list( # Oracle
+      tpr = mmean[(2L * ncut + 1L):(3L * ncut)],
+      fpr = mmean[(3L * ncut + 1L):(4L * ncut)]
+    )
+  )
+}
+
+get_mnplus_curves <- function(M) {
+  # M: reps x (2*ncut)
+  stopifnot(is.matrix(M), ncol(M) %% 2L == 0L)
+  ncut  <- ncol(M) %/% 2L
+  mmean <- apply(M, 2, mean, na.rm = TRUE)
+  list(
+    tpr = mmean[1:ncut],
+    fpr = mmean[(ncut + 1):(2L * ncut)]
+  )
+}
+
+col_proposed <- "red";       lty_proposed <- 1; pch_proposed <- 1
+col_mnplus   <- "blue";      lty_mnplus   <- 2; pch_mnplus   <- 2
+col_oracle   <- "darkgreen"; lty_oracle   <- 3; pch_oracle   <- 4
+
+scenarios <- c("berA", "berB", "berC")
+Ts        <- c(5, 80)
+base_dir  <- "./"
+
+## ---- Loop: 3 scenarios × 2 T's = 6 plots ----
+for (sc in scenarios) {
+  for (TT in Ts) {
+    
+    ## Load SS (Proposed + Oracle)
+    ss_file <- file.path(base_dir, sprintf("LkPdct_SS_%s_T%d.rda", sc, TT))
+    if (!file.exists(ss_file)) {
+      message("Missing SS file: ", ss_file, " (skipping)."); next
+    }
+    ss_env <- new.env(parent = emptyenv())
+    load(ss_file, envir = ss_env)
+    ss_obj_name <- sprintf("SS_%s_T%d", sc, TT)
+    if (!exists(ss_obj_name, envir = ss_env)) {
+      message("Object ", ss_obj_name, " not found in ", ss_file, " (skipping)."); next
+    }
+    Res_silr <- ss_env[[ss_obj_name]]
+    
+    ## Load MN+
+    mn_file <- file.path(base_dir, sprintf("LkPdct_MN+_%s_T%d.rda", sc, TT))
+    if (!file.exists(mn_file)) {
+      message("Missing MN+ file: ", mn_file, " (skipping)."); next
+    }
+    mn_env <- new.env(parent = emptyenv())
+    load(mn_file, envir = mn_env)
+    mn_obj_name <- sprintf("MNplus_%s_T%d", sc, TT)
+    if (!exists(mn_obj_name, envir = mn_env)) {
+      message("Object ", mn_obj_name, " not found in ", mn_file, " (skipping)."); next
+    }
+    Err_mn_refit <- mn_env[[mn_obj_name]]
+    
+    silr   <- get_silr_curves(Res_silr)       # Proposed + Oracle
+    mnplus <- get_mnplus_curves(Err_mn_refit) # MN+ (refit)
+    
+    out_pdf <- sprintf("plot_simupred4_%s_mean_T%d_pi09_MNplus_refit_only.pdf", sc, TT)
+    pdf(out_pdf, width = 4, height = 4)
+    par(mar = c(4, 4.5, 1, 1))
+    par(pty = "s")
+    
+    plot(silr$orac$fpr, silr$orac$tpr,
+         type = "o", col = col_oracle, pch = pch_oracle, lty = lty_oracle, lwd = 1,
+         xlab = "False-positive rate", ylab = "True-positive rate",
+         xlim = c(0, 1), ylim = c(0, 1),
+         cex.axis = 1.2, cex.lab = 1.5)
+    
+    lines(mnplus$fpr, mnplus$tpr,
+          type = "o", col = col_mnplus, pch = pch_mnplus, lty = lty_mnplus, lwd = 1)
+    
+    # Finally Proposed (SS refinement)
+    lines(silr$prop$fpr, silr$prop$tpr,
+          type = "o", col = col_proposed, pch = pch_proposed, lty = lty_proposed, lwd = 1)
+    
+    abline(0, 1, lty = 3, col = "gray70")
+    
+    legend("bottomright",
+           legend = c("SS-refinement", "MultiNeSS+", "Oracle"),
+           col    = c(col_proposed, col_mnplus, col_oracle),
+           pch    = c(pch_proposed, pch_mnplus, pch_oracle),
+           lty    = c(lty_proposed, lty_mnplus, lty_oracle),
+           lwd    = 1,
+           bty    = "n",
+           cex    = 1.3)
+    
+    dev.off()
+    message("Wrote ", out_pdf)
+  }
+}
+
